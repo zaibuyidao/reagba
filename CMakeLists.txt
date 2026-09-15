@@ -10,6 +10,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 option(REAGBA_EXTENSION "Build the REAPER native extension" ON)
 option(REAGBA_TESTS "Build native verification executable" ON)
+if(APPLE AND REAGBA_EXTENSION)
+  # Enable both languages before FetchContent configures SDL's .m sources.
+  # Enabling OBJCXX afterward leaves earlier subdirectories without its
+  # compile/archive rules when CMake assigns source languages at generation.
+  enable_language(OBJC OBJCXX)
+endif()
 if(MSVC)
   add_compile_options(/utf-8 /MP)
   add_compile_options($<$<COMPILE_LANGUAGE:CXX>:/EHsc> $<$<CONFIG:Release>:/O2>)
@@ -105,7 +111,6 @@ if(REAGBA_EXTENSION)
     target_link_libraries(reaper_reagba PRIVATE "${REAGBA_WEBVIEW2_DIR}/build/native/x64/WebView2LoaderStatic.lib"
       user32 ole32 oleaut32 shlwapi version comctl32 imm32 d3d11 dxgi d3dcompiler)
   elseif(APPLE)
-    enable_language(OBJCXX)
     set_target_properties(reaper_reagba PROPERTIES OBJCXX_STANDARD 17 OBJCXX_STANDARD_REQUIRED YES)
     if(CMAKE_OSX_ARCHITECTURES)
       set(REAGBA_PROCESSOR "${CMAKE_OSX_ARCHITECTURES}")
