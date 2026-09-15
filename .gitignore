@@ -1,0 +1,14 @@
+/build*/
+/third_party/
+/data/
+/verification/
+/ROM/
+/runtime/
+/dist/
+/node_modules/
+__pycache__/
+*.pyc
+*.user
+*.log
+.DS_Store
+Thumbs.db

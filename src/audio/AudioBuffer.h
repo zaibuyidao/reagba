@@ -1,0 +1,37 @@
+#pragma once
+#include <array>
+#include <atomic>
+#include <cstdint>
+#include <cstddef>
+namespace reagba {
+class AudioBuffer {
+    static constexpr size_t Capacity = 8192; // 125 ms maximum, interleaved stereo
+    std::array<int16_t, Capacity> samples_{};
+    alignas(64) std::atomic<size_t> write_{0};
+    alignas(64) std::atomic<size_t> read_{0};
+
+  public:
+    size_t Push(const int16_t *data, size_t count) {
+        auto w = write_.load(std::memory_order_relaxed);
+        auto r = read_.load(std::memory_order_acquire);
+        count = count < Capacity - (w - r) ? count : Capacity - (w - r);
+        for (size_t i = 0; i < count; ++i)
+            samples_[(w + i) % Capacity] = data[i];
+        write_.store(w + count, std::memory_order_release);
+        return count;
+    }
+    size_t Pop(int16_t *data, size_t count) {
+        auto r = read_.load(std::memory_order_relaxed);
+        auto w = write_.load(std::memory_order_acquire);
+        count = count < w - r ? count : w - r;
+        for (size_t i = 0; i < count; ++i)
+            data[i] = samples_[(r + i) % Capacity];
+        read_.store(r + count, std::memory_order_release);
+        return count;
+    }
+    // Consumer only. The producer must never alter the read cursor.
+    void Discard() {
+        read_.store(write_.load(std::memory_order_acquire), std::memory_order_release);
+    }
+};
+} // namespace reagba
