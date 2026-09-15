@@ -13,6 +13,7 @@ class D3DRenderer {
     Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> resource_;
     Microsoft::WRL::ComPtr<ID3D11VertexShader> vertex_;
     Microsoft::WRL::ComPtr<ID3D11PixelShader> pixel_;
+    Microsoft::WRL::ComPtr<ID3D11Buffer> uniforms_;
     Microsoft::WRL::ComPtr<ID3D11SamplerState> nearest_, linear_;
     int width_ = 0, height_ = 0;
 

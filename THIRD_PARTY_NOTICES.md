@@ -18,3 +18,8 @@ ReaGBA 使用以下上游依赖。ROM、Nintendo BIOS 和用户进度不在源�
 对应许可证文本位于 licenses。mGBA 的 MPL 文件、blip_buf 的 LGPL 文件及其余依赖以各自许可证为准，应用源码不会更改这些授权。完整应用构建脚本与固定依赖源码入口随仓库提供，可用于修改依赖并重新链接。依赖下载在 third_party 或构建目录内进行，既有目录优先用于本地开发；干净 CI 从上述固定版本获取。
 
 REAPER 宿主实现和发布流程参考同一作者的 [Sendmanager](https://github.com/zaibuyidao/Sendmanager)。应用自身的发布授权由仓库所有者另行声明。
+
+## 内置 LCD 效果
+
+- LCD3X 采用 Gigaherz 的 [LCD3x 正弦遮罩](https://github.com/libretro/glsl-shaders/blob/master/handheld/shaders/lcd3x.glsl)，上游声明为 Public domain；采用默认亮度参数 16 / 4。
+- lcd-grid-v2 参考 cgwg 的 [LCD 子像素积分模型](https://github.com/libretro/glsl-shaders/blob/master/handheld/shaders/lcd-cgwg/lcd-grid-v2.glsl)，在 `src/video/BuiltinShaders.h` 中实现积分多项式的 Horner 求值和 D3D/OpenGL 公用公式；默认 RGB 原色、gamma 3 / 2.2、black level 0.05。未打包上游完整 shader 文件或 RetroArch 加载器。

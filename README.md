@@ -33,6 +33,8 @@ Linux 的 `extension/reagba-webview-*` 是界面与原生 OpenGL 渲染辅助进
 
 支持暂停、继续、重置、停止、1×/2×/4× 倍率、音量、跳帧、9 个即时存档槽、电池存档、BMP 截图、收藏、搜索和最近游玩。只支持直接加载 `.gba`，ZIP 需先解压。
 
+设置 → 画面 → **Shader** 可选择关闭（默认）、**LCD3X** 或 **lcd-grid-v2**，选择立即生效并自动保存。Windows 的 D3D11 与 macOS/Linux 的 OpenGL 使用同一套效果公式；建议整数倍缩放，LCD3X 在 3× 以上更明显。Shader 启用时接管纹理采样，关闭后恢复原先的纹理过滤设置。效果内置在扩展/辅助进程中，不增加 `web` 文件；目前是两个固定预设，不支持导入任意 `.glslp` / `.slangp`。截图仍保存核心原始画面，不叠加显示 shader。
+
 全部运行数据位于 REAPER 资源目录的 `Scripts/zaibuyidao Scripts/ReaGBA`：配置、存档、截图、缓存和 WebView 数据分别写入这里的对应子目录。不会读取或迁移 `Data/ReaGBA` 及旧 `Various/ReaGBA` 地址。设置中选择的 ROM 游戏文件夹和“打开 ROM”最后访问的文件夹都会保存。电池存档在暂停、切换游戏、正常关闭及定时检查时保存；即时存档按 ROM SHA-256 和核心版本核对。
 
 ## 构建与验证
@@ -72,6 +74,8 @@ python scripts/extension_smoke.py --reaper C:/REAPER/reaper.exe --rom ./ROM/game
 ```
 
 扩展测试使用独立的 `build/extension-smoke` REAPER 配置和 `verification` 存档，不操作日常工程。无 ROM 的 CTest 覆盖核心边界、Windows 键位、WebView 通信、发布包边界和 Linux 共享帧恢复。可选的布局测试需要 Playwright：`npm install --no-save playwright`、`npx playwright install chromium` 后运行 `node tests/layout_verify.cjs`。
+
+设置页回归测试：`node tests/settings_verify.cjs`，检查不同宽高下无横向溢出、shader 保存/恢复、三份 UI 文件直接加载。Windows 的 `native_shaders` CTest 用 WARP 离屏渲染两个预设，与独立 CPU 数学参考逐像素抽样比对；运行 `reagba_shader_verify verification/shaders` 后还可执行 `node tests/shaders_gl_verify.cjs`，将同一 GLSL 程序转为 GLSL ES 3.0，在 WebGL2 中与 D3D 输出比对（不代替 macOS/Linux 实机 OpenGL 验收）。
 
 Windows 本地已验证 REAPER 7.78 中注册操作、塞尔达 ROM 运行、音频设备、停靠/取消停靠及存读档。macOS 和 Linux 的桌面停靠、音频设备、实体手柄仍需对应系统实机验收；GitHub Actions 编译成功不能替代这些检查。详细验证范围见 [docs/VALIDATION.md](docs/VALIDATION.md)。
 

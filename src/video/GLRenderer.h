@@ -1,5 +1,6 @@
 #pragma once
 #include "video/VideoTypes.h"
+#include "video/BuiltinShaders.h"
 #ifdef __APPLE__
 #include <OpenGL/gl3.h>
 #else
@@ -11,6 +12,7 @@
 namespace reagba {
 class GLRenderer {
     GLuint program_ = 0, texture_ = 0, vao_ = 0;
+    GLint sourceSize_ = -1, outputSize_ = -1, shaderPreset_ = -1;
     static GLuint Shader(GLenum type, const char *source) {
         auto shader = glCreateShader(type);
         glShaderSource(shader, 1, &source, nullptr);
@@ -28,11 +30,9 @@ class GLRenderer {
 
   public:
     GLRenderer() {
-        auto vs = Shader(GL_VERTEX_SHADER, "#version 150\nout vec2 uv;void "
-                                           "main(){uv=vec2((gl_VertexID<<1)&2,gl_VertexID&2);gl_Position="
-                                           "vec4(uv*vec2(2,-2)+vec2(-1,1),0,1);}");
-        auto ps = Shader(GL_FRAGMENT_SHADER, "#version 150\nin vec2 uv;uniform sampler2D frame;out vec4 "
-                                             "color;void main(){color=vec4(texture(frame,uv).rgb,1);}");
+        const auto fragment = shaders::GLSLFragment();
+        auto vs = Shader(GL_VERTEX_SHADER, shaders::GLSLVertex);
+        auto ps = Shader(GL_FRAGMENT_SHADER, fragment.c_str());
         program_ = glCreateProgram();
         glAttachShader(program_, vs);
         glAttachShader(program_, ps);
@@ -43,6 +43,9 @@ class GLRenderer {
         glGetProgramiv(program_, GL_LINK_STATUS, &ok);
         if (!ok)
             throw std::runtime_error("OpenGL program link failed");
+        sourceSize_ = glGetUniformLocation(program_, "sourceSize");
+        outputSize_ = glGetUniformLocation(program_, "outputSize");
+        shaderPreset_ = glGetUniformLocation(program_, "shaderPreset");
         glGenVertexArrays(1, &vao_);
         glGenTextures(1, &texture_);
         glBindTexture(GL_TEXTURE_2D, texture_);
@@ -61,6 +64,7 @@ class GLRenderer {
         glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, Width, Height, GL_RGBA, GL_UNSIGNED_BYTE, frame.data());
     }
     void Draw(int width, int height, VideoSettings s, int yOffset = 0) {
+        if (width <= 0 || height <= 0) return;
         glViewport(0, 0, width, height);
         glClearColor(.027f, .039f, .055f, 1);
         glClear(GL_COLOR_BUFFER_BIT);
@@ -74,8 +78,12 @@ class GLRenderer {
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, texture_);
         glUniform1i(glGetUniformLocation(program_, "frame"), 0);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, s.linear ? GL_LINEAR : GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, s.linear ? GL_LINEAR : GL_NEAREST);
+        glUniform2f(sourceSize_, float(Width), float(Height));
+        glUniform2f(outputSize_, float(w), float(h));
+        glUniform1i(shaderPreset_, int(s.shader));
+        const auto filter = s.linear && s.shader == ShaderPreset::None ? GL_LINEAR : GL_NEAREST;
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
         glDrawArrays(GL_TRIANGLES, 0, 3);
     }
 };

@@ -139,7 +139,7 @@ void Handle(App* app,const std::string& line) {
         } else if(action=="viewport") {
             auto& v=app->viewport;v={message.at("x"),message.at("y"),message.at("width"),message.at("height"),message.at("clipTop"),message.at("clipBottom"),message.at("clientWidth"),message.at("visible")};Layout(app);
         } else if(action=="keyboard")app->blocked=message.at("blocked");
-        else if(action=="settings") {app->video.integerScaling=message.at("integer");app->video.linear=message.at("linear");app->keys.clear();for(const auto& key:message.at("keys"))app->keys.insert(key.get<std::string>());}
+        else if(action=="settings") {app->video.integerScaling=message.at("integer");app->video.linear=message.at("linear");app->video.shader=reagba::ParseShaderPreset(message.value("shader",std::string("none")));app->keys.clear();for(const auto& key:message.at("keys"))app->keys.insert(key.get<std::string>());}
         else if(action=="focus_game") {app->blocked=false;XSetInputFocus(display,child,RevertToParent,CurrentTime);gtk_widget_grab_focus(app->game);XFlush(display);}
         else if (action == "focus" && app->parent) {
             XSetInputFocus(display,child,RevertToParent,CurrentTime); XFlush(display);

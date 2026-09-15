@@ -125,7 +125,7 @@ public:
     }
     void SetVideo(VideoSettings video) override {
         video_=video;nlohmann::json keys=nlohmann::json::array();for(auto scan:config_.input->Mapping())keys.push_back(SDL_GetScancodeName(scan));
-        Queue(nlohmann::json{{"_host","settings"},{"integer",video.integerScaling},{"linear",video.linear},{"keys",keys}}.dump());
+        Queue(nlohmann::json{{"_host","settings"},{"integer",video.integerScaling},{"linear",video.linear},{"shader",ShaderPresetName(video.shader)},{"keys",keys}}.dump());
     }
     void FocusGame() override {blocked_=false;config_.input->Clear();Queue("{\"_host\":\"focus_game\"}");}
     void BlockKeyboard(bool blocked) override {blocked_=blocked;config_.input->Clear();Queue(nlohmann::json{{"_host","keyboard"},{"blocked",blocked}}.dump());}

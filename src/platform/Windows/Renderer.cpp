@@ -1,4 +1,5 @@
 #include "platform/Windows/Renderer.h"
+#include "video/BuiltinShaders.h"
 #include <d3dcompiler.h>
 #include <algorithm>
 #include <cmath>
@@ -26,17 +27,17 @@ D3DRenderer::D3DRenderer(HWND window) {
     ComPtr<IDXGIFactory> factory;
     if (SUCCEEDED(swap_->GetParent(IID_PPV_ARGS(&factory))))
         factory->MakeWindowAssociation(window, DXGI_MWA_NO_ALT_ENTER);
-    const char *shader = R"(
-struct V {float4 pos:SV_POSITION;float2 uv:TEXCOORD;};
-V vs(uint id:SV_VertexID){V o;o.uv=float2((id<<1)&2,id&2);o.pos=float4(o.uv*float2(2,-2)+float2(-1,1),0,1);return o;}
-Texture2D frame:register(t0);SamplerState sampling:register(s0);
-float4 ps(V v):SV_TARGET{return float4(frame.Sample(sampling,v.uv).rgb,1);}
-)";
+    const auto fragment = shaders::HLSLFragment();
     ComPtr<ID3DBlob> vs, ps, error;
-    Check(D3DCompile(shader, strlen(shader), nullptr, nullptr, nullptr, "vs", "vs_4_0", 0, 0, &vs, &error));
-    Check(D3DCompile(shader, strlen(shader), nullptr, nullptr, nullptr, "ps", "ps_4_0", 0, 0, &ps, &error));
+    Check(D3DCompile(shaders::HLSLVertex, sizeof(shaders::HLSLVertex)-1, nullptr, nullptr, nullptr, "vs", "vs_4_0", 0, 0, &vs, &error));
+    Check(D3DCompile(fragment.data(), fragment.size(), nullptr, nullptr, nullptr, "ps", "ps_4_0", 0, 0, &ps, &error));
     Check(device_->CreateVertexShader(vs->GetBufferPointer(), vs->GetBufferSize(), nullptr, &vertex_));
     Check(device_->CreatePixelShader(ps->GetBufferPointer(), ps->GetBufferSize(), nullptr, &pixel_));
+    D3D11_BUFFER_DESC constants{};
+    constants.ByteWidth = sizeof(shaders::Uniforms);
+    constants.Usage = D3D11_USAGE_DEFAULT;
+    constants.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+    Check(device_->CreateBuffer(&constants, nullptr, &uniforms_));
     D3D11_TEXTURE2D_DESC tex{};
     tex.Width = Width;
     tex.Height = Height;
@@ -92,8 +93,13 @@ void D3DRenderer::Draw(VideoSettings settings) {
     context_->PSSetShader(pixel_.Get(), nullptr, 0);
     auto *r = resource_.Get();
     context_->PSSetShaderResources(0, 1, &r);
-    auto *s = settings.linear ? linear_.Get() : nearest_.Get();
+    // Presets own their sampling; the plain texture filter is restored on "none".
+    auto *s = settings.linear && settings.shader == ShaderPreset::None ? linear_.Get() : nearest_.Get();
     context_->PSSetSamplers(0, 1, &s);
+    const shaders::Uniforms values{float(Width), float(Height), view.Width, view.Height, int(settings.shader)};
+    context_->UpdateSubresource(uniforms_.Get(), 0, nullptr, &values, 0, 0);
+    auto *u = uniforms_.Get();
+    context_->PSSetConstantBuffers(0, 1, &u);
     context_->Draw(3, 0);
     Check(swap_->Present(settings.vsync ? 1 : 0, 0));
 }

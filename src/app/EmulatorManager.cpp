@@ -1,6 +1,7 @@
 #include "app/EmulatorManager.h"
 #include "core/gba/GBACore.h"
 #include "input/KeyBindings.h"
+#include "video/ShaderPreset.h"
 #include <chrono>
 #include <cmath>
 #ifndef REAGBA_VERSION
@@ -25,6 +26,9 @@ EmulatorManager::EmulatorManager(fs::path romDir, fs::path dataDir)
         preferences_["rom_directory"].get<std::string>().empty())
         preferences_["rom_directory"] = romDir_.u8string();
     NormalizeKeys(preferences_);
+    if (!preferences_.contains("shader") || !preferences_["shader"].is_string() ||
+        !IsShaderPreset(preferences_["shader"].get<std::string>()))
+        preferences_["shader"] = "none";
     worker_ = std::thread(&EmulatorManager::Run, this);
 }
 EmulatorManager::~EmulatorManager() {
@@ -94,6 +98,9 @@ Json EmulatorManager::Handle(const Json &cmd) {
         auto settings = cmd.at("settings");
         if (!settings.is_object())
             throw std::runtime_error("settings must be an object");
+        if (settings.contains("shader") &&
+            (!settings["shader"].is_string() || !IsShaderPreset(settings["shader"].get<std::string>())))
+            throw std::runtime_error("Unknown shader preset (expected none, lcd3x or lcd-grid-v2)");
         for (const auto *key : {"library_split"}) {
             if (!settings.contains(key))
                 continue;
@@ -110,7 +117,7 @@ Json EmulatorManager::Handle(const Json &cmd) {
             if (it.key() == "keys" || it.key() == "integer_scaling" || it.key() == "filter" ||
                 it.key() == "bios" || it.key() == "vsync" || it.key() == "fast_forward_key" ||
                 it.key() == "library_split" || it.key() == "rom_directory" ||
-                it.key() == "last_rom_directory")
+                it.key() == "last_rom_directory" || it.key() == "shader")
                 preferences_[it.key()] = it.value();
         Persist();
         return preferences_;

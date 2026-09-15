@@ -8,6 +8,12 @@ CTest 覆盖核心参数与缓冲边界、默认键位及短按/组合键/失焦
 
 布局自动检查覆盖 298×1299 至 1920×400 的 8 种尺寸、拖动分隔条、占比保存/恢复、边界限制和双击复位。界面只有上下排列。
 
+本次 LCD Shader 检查：Windows D3D11/WARP 的 24 组离屏渲染（关闭、LCD3X、lcd-grid-v2、再关闭；0.6×、1×、2×、3×、4×及非整数缩放）与独立双精度 CPU 参考比对，最大色阶误差 1/255。导出的公用 GLSL 转为 GLSL ES 3.0 后，通过 WebGL2 编译、绘制 18 组相同画面，与 D3D 输出最大差异 1/255。覆盖边缘夹取与不透明 alpha；最近邻采样恰落在两个源像素分界处时允许硬件舍入差异。以上检查不等同于 macOS/Linux 原生驱动实测。
+
+2026-09-16 已使用固定版本 mGBA / SDL / JSON / REAPER SDK / WebView2 完成 Windows Release DLL 的完整编译及安装目录生成；6/6 CTest 通过（原生核心不变量、shader、键盘、运行路径、打包、WebView 通信）。配置测试通过真实 `EmulatorManager` 写入/重读 preferences.json，确认 shader 默认关闭、三个预设可用、非法值被拒绝、重启后保留选择。本次未重新进行真实 ROM 的 REAPER 宿主 smoke 测试，也未生成 macOS/Linux 新二进制。
+
+`settings_verify.cjs` 用三份实际 UI 文件及模拟原生桥，在 240×500 至 1920×2000 的 10 种尺寸中确认设置区域 `scrollWidth <= clientWidth`、BIOS 按钮可达、冗余键位说明已移除、shader 选项保存/重开恢复，以及 JavaScript/CSP 无错误。浏览器测试显式保留滚动条；修复前该测试定位到音量 range 的默认左右 margin 导致 4 像素溢出。
+
 路径测试确认配置、存档、截图、缓存和 WebView 数据都位于 `Scripts/zaibuyidao Scripts/ReaGBA`，且旧地址不会被使用。安装 ZIP 的 `web` 只含三份可直接运行且与源码一致的 UI 文件；`.ext` 使用实际 reapack-index 检查五个平台的 22 个 source、公开 ReaScripts 提交链接及不注册脚本的文件映射。打包测试覆盖固定的 7 个扩展文件、3 个 UI 文件、五平台汇总、公共 UI 一致性、私有数据排除和缺失文件。
 
 ## 跨平台边界
@@ -23,6 +29,9 @@ WSL Ubuntu 24.04 中已成功编译 Linux x86_64 扩展和 GTK3/WebKitGTK 辅助
 - Windows `reagba_input_verify <ROM.gba> <output.json>`：默认按键与真实核心寄存器。
 - `python scripts/extension_smoke.py --reaper <reaper.exe> --rom <ROM.gba>`：隔离 REAPER 扩展测试。
 - `node tests/layout_verify.cjs`：安装 Playwright 后验证响应式界面。
+- `node tests/settings_verify.cjs`：设置页滚动与 shader 选择保存测试。
+- Windows `reagba_shader_verify verification/shaders`：D3D 编译/像素参考测试，导出 GPU 结果。
+- `node tests/shaders_gl_verify.cjs`：以上导出结果的 WebGL2/GLSL ES 跨后端比对。
 - `ruby tests/ReaPackIndex.rb <generated ReaGBA.ext> <temporary index.xml>`：安装 reapack-index 1.2.3 后验证真实索引格式，不写公开仓库的 index.xml。
 - 手动：新建空工程打开 ReaGBA，点击原生画面，逐个按 W/S/A/D、J/K、Q/E、回车、空格、R，检查失焦释放、搜索不触发游戏键、停靠及拖动。
 

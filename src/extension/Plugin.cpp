@@ -210,7 +210,7 @@ void Timer() {
                 if(reply.value("ok",false)) {
                     if(action=="get_settings" || action=="set_settings") {
                         const auto& settings=reply["result"];s.input->Configure(settings);
-                        s.host->SetVideo({settings.value("integer_scaling",true),settings.value("filter",std::string("nearest"))=="linear",settings.value("vsync",true)});
+                        s.host->SetVideo({settings.value("integer_scaling",true),settings.value("filter",std::string("nearest"))=="linear",settings.value("vsync",true),ParseShaderPreset(settings.value("shader",std::string("none")))});
                     }
                     if(type=="state" || action=="get_emulator_state" || action=="load_rom" || action=="load_state" || action=="start" || action=="pause" || action=="stop" || action=="reset" || action=="set_speed") {
                         auto& state=reply["result"];state["reaper"]=true;state["docked"]=IsDocked();

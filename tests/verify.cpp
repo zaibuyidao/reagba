@@ -63,6 +63,11 @@ static void SelfTest() {
         EmulatorManager manager(defaultROM,settingsRoot/"ReaGBA");
         auto settings=Call(manager,{{"action","get_settings"}}).at("result");
         Require(fs::u8path(settings.at("rom_directory").get<std::string>())==defaultROM,"Default ROM folder mismatch");
+        Require(settings.at("shader")=="none","Shader must default to off");
+        for(const auto* preset:{"lcd3x","none","lcd-grid-v2"})
+            Require(Call(manager,{{"action","set_settings"},{"settings",{{"shader",preset}}}}).at("result").at("shader")==preset,"Shader preset rejected");
+        for(const Json& preset:{Json("unknown"),Json(1),Json(nullptr),Json::object()})
+            Require(!Call(manager,{{"action","set_settings"},{"settings",{{"shader",preset}}}}).value("ok",true),"Invalid shader accepted");
         Require(Call(manager,{{"action","set_settings"},{"settings",{{"rom_directory",customROM.u8string()}}}}).value("ok",false),"ROM folder setting rejected");
         Require(!Call(manager,{{"action","set_settings"},{"settings",{{"rom_directory",""}}}}).value("ok",true),"Empty ROM folder accepted");
         std::ofstream(customROM/"broken.gba",std::ios::binary).put('\0');
@@ -74,9 +79,10 @@ static void SelfTest() {
         const auto settings=Call(manager,{{"action","get_settings"}}).at("result");
         Require(fs::u8path(settings.at("rom_directory").get<std::string>())==customROM,"ROM folder did not survive restart");
         Require(fs::u8path(settings.at("last_rom_directory").get<std::string>())==customROM,"Last opened ROM folder did not survive restart");
+        Require(settings.at("shader")=="lcd-grid-v2","Shader did not survive restart");
     }
     fs::remove_all(settingsRoot);
-    std::cout << "PASS: SHA-256, bounded audio ring, concurrent triple buffer, persisted ROM folders\n";
+    std::cout << "PASS: SHA-256, bounded audio ring, concurrent triple buffer, persisted ROM folders and shaders\n";
 }
 static Json Call(EmulatorManager &manager, Json cmd) {
     std::promise<Json> promise;
