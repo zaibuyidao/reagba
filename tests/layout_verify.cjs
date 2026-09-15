@@ -8,34 +8,33 @@ const root = path.resolve(__dirname, '..');
 const output = path.join(root, 'verification/responsive');
 fs.mkdirSync(output, { recursive: true });
 const mock = `
-let preferences={keys:['J','K','Space','Return','D','A','W','S','E','Q'],fast_forward_key:'R',layout:'horizontal'};
+let preferences={keys:['J','K','Space','Return','D','A','W','S','E','Q'],fast_forward_key:'R',layout:'horizontal',rom_directory:'C:/ROM',...JSON.parse(localStorage.getItem('reagba-test-settings')||'{}')};
 const requests=[];
-const fixture={loaded:true,running:true,fps:59.7,speed:1,base_speed:1,volume:.7,core:'mGBA 0.10.5',game:{hash:'fixture',code:'TEST',title:'GBA 布局测试',path:'fixture.gba'},reaper:true,docked:true};
+const fixture={loaded:true,running:true,fps:59.7,speed:1,base_speed:1,volume:.7,app_version:'0.0.2',core:'mGBA 0.10.5',game:{hash:'fixture',code:'TEST',title:'GBA 布局测试',path:'C:/ROM/fixture.gba'},reaper:true,docked:true};
 window.nativeRequest=async cmd=>{requests.push(cmd);let result=true;
 if(cmd.action==='get_settings')result=preferences;
-if(cmd.action==='set_settings')result=preferences={...preferences,...cmd.settings};
+if(cmd.action==='set_settings'){result=preferences={...preferences,...cmd.settings};localStorage.setItem('reagba-test-settings',JSON.stringify(preferences));}
+if(cmd.action==='select_rom_directory'){result=preferences={...preferences,rom_directory:'D:/GBA Games',last_rom_directory:'D:/GBA Games'};localStorage.setItem('reagba-test-settings',JSON.stringify(preferences));}
 if(cmd.action==='get_emulator_state')result=fixture;
 if(cmd.action==='load_rom')result=fixture;
 if(cmd.action==='scan_roms')result=Array.from({length:18},(_,i)=>({...fixture.game,path:'fixture-'+i+'.gba',title:i?'游戏库测试 '+String(i+1).padStart(2,'0'):fixture.game.title,size:16777216,play_seconds:0,last_played:0,favorite:false}));
 if(cmd.action==='get_save_states')result=[];
 return {ok:true,result};};
 `;
-const html = fs.readFileSync(path.join(root,'ui/index.html'),'utf8')
-    .replace('/* REAGBA_STYLE */',fs.readFileSync(path.join(root,'ui/style.css'),'utf8'))
-    .replace('/* REAGBA_SCRIPT */',mock+'\n'+fs.readFileSync(path.join(root,'ui/app.js'),'utf8'));
+const entry = 'file:///'+path.join(root,'ui/index.html').replaceAll('\\','/');
 (async()=>{
     const env=Object.fromEntries(Object.entries(process.env).map(([key,value])=>[key.toUpperCase(),value]));
     const browser=await chromium.launch({headless:true,...(process.env.REAGBA_BROWSER_CHANNEL?{channel:process.env.REAGBA_BROWSER_CHANNEL}:{}),env});
     try {
         const page=await browser.newPage();
+        await page.addInitScript({content:mock});
         const settle=()=>page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
         const errors=[];
         page.on('pageerror', e=>errors.push(e.message));
         const results=[];
         for(const [width,height] of [[298,1299],[320,500],[400,600],[440,900],[760,1200],[1280,540],[1600,900],[1920,400]]) {
-            await page.goto('about:blank');
             await page.setViewportSize({width,height});
-            await page.setContent(html);
+            await page.goto(entry);
             await page.waitForFunction(()=>document.body.classList.contains('playing'));
             await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
             const metrics=await page.evaluate(()=>layoutMetrics());
@@ -63,6 +62,8 @@ const html = fs.readFileSync(path.join(root,'ui/index.html'),'utf8')
         assert.equal(await page.locator('#layout').count(),0,'horizontal layout selector removed');
         await page.click('#settings-toggle');
         assert.equal(await page.locator('#game-viewport').isVisible(),false,'settings hides native viewport');
+        await page.click('#choose-rom-directory');
+        assert.equal(await page.locator('#rom-directory').inputValue(),'D:/GBA Games','ROM folder chooser saves and displays the selected path');
         await page.click('#settings-toggle');
         await settle();
         await page.click('#library-toggle');
@@ -91,8 +92,7 @@ const html = fs.readFileSync(path.join(root,'ui/index.html'),'utf8')
         const smallest=await drag(1200);
         assert.ok(smallest.game.height>=64,'drag leaves a usable minimum game area');
         assert.ok(smallest.load.bottom<1299-24,'drag never clips save controls');
-        await page.goto('about:blank');
-        await page.setContent(html.replace('let preferences={','let preferences={...'+JSON.stringify(saved)+','));
+        await page.goto(entry);
         await page.waitForFunction(()=>document.body.classList.contains('playing'));await settle();
         const reopened=await page.evaluate(()=>layoutMetrics());
         assert.ok(Math.abs(reopened.library.height-dragged.library.height)<1,'split restored on reopening');

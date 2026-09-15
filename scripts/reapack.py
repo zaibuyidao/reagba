@@ -7,7 +7,7 @@ PLATFORM_IDS={'windows-x64':'win64','macos-x86_64':'darwin64','macos-arm64':'dar
 BASE_URL='https://raw.githubusercontent.com/zaibuyidao/ReaScripts/$commit/ReaGBA'
 
 def web_files():
-    return ['index.html','README.md','THIRD_PARTY_NOTICES.md'] + ['licenses/'+p.name for p in sorted((release.ROOT/'licenses').glob('*.txt')) if p.name!='webview-MIT.txt']
+    return ['app.js','index.html','style.css']
 
 def sources():
     entries=[]
@@ -27,7 +27,7 @@ def manifest():
         options=entry['platform']+' '+entry['type']+(' nomain' if entry['type']=='script' else '')
         lines.append('  ['+options+'] '+entry['file']+' '+BASE_URL+'/'+entry['path'])
     lines+=['@changelog','  Native extension action: zaibuyidao: ReaGBA. No Lua launcher.',
-            '  Install WebView assets under ReaGBA/web; preserve game data separately.']
+            '  Install the three WebView assets under ReaGBA/web.']
     return '\n'.join(lines)+'\n'
 
 def bundle_name(version=None):

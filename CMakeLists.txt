@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(ReaGBA VERSION 0.0.2 LANGUAGES C CXX)
+project(ReaGBA VERSION 0.0.3 LANGUAGES C CXX)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 set(CMAKE_C_VISIBILITY_PRESET hidden)
@@ -56,6 +56,7 @@ add_library(reagba_core STATIC
   src/core/gba/GBACore.cpp src/save/SaveManager.cpp
   src/rom/ROMManager.cpp src/app/EmulatorManager.cpp src/bridge/WebBridge.cpp)
 target_include_directories(reagba_core PUBLIC src PRIVATE "${mgba_SOURCE_DIR}/include" "${mgba_BINARY_DIR}/include")
+target_compile_definitions(reagba_core PRIVATE REAGBA_VERSION="${PROJECT_VERSION}")
 target_link_libraries(reagba_core PUBLIC nlohmann_json::nlohmann_json Threads::Threads PRIVATE mgba)
 if(REAGBA_TESTS)
   enable_testing()
@@ -150,15 +151,14 @@ if(REAGBA_EXTENSION)
     message(FATAL_ERROR "Supported extension platforms: Windows, macOS, Linux")
   endif()
   set_target_properties(reaper_reagba PROPERTIES PREFIX "" OUTPUT_NAME "reaper_reagba-${REAGBA_ARCH}")
-  add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/runtime/index.html"
+  add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/runtime/index.html" "${CMAKE_BINARY_DIR}/runtime/style.css" "${CMAKE_BINARY_DIR}/runtime/app.js"
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/scripts/prepare_ui.py" "${CMAKE_SOURCE_DIR}/ui" "${CMAKE_BINARY_DIR}/runtime" "${PROJECT_VERSION}"
     DEPENDS ui/index.html ui/style.css ui/app.js scripts/prepare_ui.py CMakeLists.txt VERBATIM)
-  add_custom_target(reagba_ui ALL DEPENDS "${CMAKE_BINARY_DIR}/runtime/index.html")
+  add_custom_target(reagba_ui ALL DEPENDS "${CMAKE_BINARY_DIR}/runtime/index.html" "${CMAKE_BINARY_DIR}/runtime/style.css" "${CMAKE_BINARY_DIR}/runtime/app.js")
   add_dependencies(reaper_reagba reagba_ui)
   install(TARGETS reaper_reagba RUNTIME DESTINATION UserPlugins COMPONENT ReaGBA LIBRARY DESTINATION UserPlugins COMPONENT ReaGBA)
-  install(FILES "${CMAKE_BINARY_DIR}/runtime/index.html" DESTINATION "${REAGBA_PRODUCT_DIR}/web" COMPONENT ReaGBA)
-  install(FILES README.md THIRD_PARTY_NOTICES.md DESTINATION "${REAGBA_PRODUCT_DIR}/web" COMPONENT ReaGBA)
-  install(DIRECTORY licenses/ DESTINATION "${REAGBA_PRODUCT_DIR}/web/licenses" COMPONENT ReaGBA)
+  install(FILES "${CMAKE_BINARY_DIR}/runtime/index.html" "${CMAKE_BINARY_DIR}/runtime/style.css" "${CMAKE_BINARY_DIR}/runtime/app.js"
+    DESTINATION "${REAGBA_PRODUCT_DIR}/web" COMPONENT ReaGBA)
   if(REAGBA_TESTS)
     add_executable(reagba_paths_verify tests/runtime_paths.cpp)
     target_include_directories(reagba_paths_verify PRIVATE src)

@@ -3,6 +3,9 @@
 #include "input/KeyBindings.h"
 #include <chrono>
 #include <cmath>
+#ifndef REAGBA_VERSION
+#define REAGBA_VERSION "dev"
+#endif
 namespace reagba {
 using Clock = std::chrono::steady_clock;
 EmulatorManager::EmulatorManager(fs::path romDir, fs::path dataDir)
@@ -17,6 +20,10 @@ EmulatorManager::EmulatorManager(fs::path romDir, fs::path dataDir)
         }
     if (preferences_.contains("volume") && preferences_["volume"].is_number())
         volume.store(std::clamp(preferences_["volume"].get<float>(), 0.f, 1.f));
+    fs::create_directories(romDir_);
+    if (!preferences_.contains("rom_directory") || !preferences_["rom_directory"].is_string() ||
+        preferences_["rom_directory"].get<std::string>().empty())
+        preferences_["rom_directory"] = romDir_.u8string();
     NormalizeKeys(preferences_);
     worker_ = std::thread(&EmulatorManager::Run, this);
 }
@@ -56,6 +63,7 @@ Json EmulatorManager::State() const {
             {"volume", volume.load()},
             {"frame_skip", frameSkip_},
             {"game", core_ ? current_.ToJson() : Json(nullptr)},
+            {"app_version", REAGBA_VERSION},
             {"core", "mGBA 0.10.5"},
             {"system", "GBA"},
             {"error", lastError_}};
@@ -69,7 +77,8 @@ Json EmulatorManager::Handle(const Json &cmd) {
     if (action == "get_emulator_state" || action == "get_game_info")
         return State();
     if (action == "scan_roms") {
-        auto path = cmd.contains("directory") ? fs::u8path(cmd.at("directory").get<std::string>()) : romDir_;
+        auto path = cmd.contains("directory") ? fs::u8path(cmd.at("directory").get<std::string>())
+                                               : fs::u8path(preferences_.value("rom_directory", romDir_.u8string()));
         library_ = ScanROMs(path);
         for (auto &r : library_) {
             auto key = r["path"].get<std::string>();
@@ -93,10 +102,15 @@ Json EmulatorManager::Handle(const Json &cmd) {
                                     value.get<double>() < 0 || value.get<double>() > 1))
                 throw std::runtime_error("Library split must be a ratio from 0 to 1, or null for automatic");
         }
+        for (const auto *key : {"rom_directory", "last_rom_directory"})
+            if (settings.contains(key) &&
+                (!settings[key].is_string() || settings[key].get<std::string>().empty()))
+                throw std::runtime_error("ROM directories must be non-empty paths");
         for (auto it = settings.begin(); it != settings.end(); ++it)
             if (it.key() == "keys" || it.key() == "integer_scaling" || it.key() == "filter" ||
                 it.key() == "bios" || it.key() == "vsync" || it.key() == "fast_forward_key" ||
-                it.key() == "library_split")
+                it.key() == "library_split" || it.key() == "rom_directory" ||
+                it.key() == "last_rom_directory")
                 preferences_[it.key()] = it.value();
         Persist();
         return preferences_;
@@ -129,7 +143,10 @@ Json EmulatorManager::Handle(const Json &cmd) {
         return State();
     }
     if (action == "load_rom") {
-        auto rom = InspectROM(fs::u8path(cmd.at("path").get<std::string>()));
+        const auto selected=fs::absolute(fs::u8path(cmd.at("path").get<std::string>()));
+        preferences_["last_rom_directory"]=selected.parent_path().u8string();
+        Persist();
+        auto rom = InspectROM(selected);
         auto next = std::make_unique<GBACore>();
         next->LoadROM(rom.path, fs::u8path(preferences_.value("bios", std::string())));
         saves_.LoadBattery(*next, rom);

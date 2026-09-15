@@ -8,7 +8,7 @@ CTest 覆盖核心参数与缓冲边界、默认键位及短按/组合键/失焦
 
 布局自动检查覆盖 298×1299 至 1920×400 的 8 种尺寸、拖动分隔条、占比保存/恢复、边界限制和双击复位。界面只有上下排列。
 
-0.2.1 的 ReaPack 路径迁移增加了新安装目录/旧进度兼容测试，以及实际操作名称 `zaibuyidao: ReaGBA` 的检查。安装 ZIP 使用 `Scripts/zaibuyidao Scripts/ReaGBA/web`；`.ext` 使用实际 reapack-index 1.2.3 检查五个平台的 67 个 source、公开 ReaScripts 提交链接及不注册脚本的文件映射。打包测试覆盖五平台汇总、公共 UI 一致性、私有数据排除、缺失文件和不可覆盖的发布行为。
+路径测试确认配置、存档、截图、缓存和 WebView 数据都位于 `Scripts/zaibuyidao Scripts/ReaGBA`，且旧地址不会被使用。安装 ZIP 的 `web` 只含三份可直接运行且与源码一致的 UI 文件；`.ext` 使用实际 reapack-index 检查五个平台的 22 个 source、公开 ReaScripts 提交链接及不注册脚本的文件映射。打包测试覆盖固定的 7 个扩展文件、3 个 UI 文件、五平台汇总、公共 UI 一致性、私有数据排除和缺失文件。
 
 ## 跨平台边界
 

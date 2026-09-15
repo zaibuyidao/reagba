@@ -9,7 +9,7 @@
 
 源码仓库不依赖 ReaScripts 的检出目录。公开包和已安装扩展不读取源码仓库，也不访问私有 GitHub 链接。工作流只在当前源码仓库生成 Release，不推送或更新 ReaScripts。
 
-不要向源码仓库添加 ROM、BIOS、data、verification、third_party、build、dist、浏览器缓存或本地测试截图。修改界面使用 `ui/index.html`、`ui/style.css`、`ui/app.js`，构建会将它们合成为 `web/index.html`。
+不要向源码仓库添加 ROM、BIOS、data、verification、third_party、build、dist、浏览器缓存或本地测试截图。修改界面使用 `ui/index.html`、`ui/style.css`、`ui/app.js`；三者必须可以直接一起运行，构建只会原样复制它们。
 
 ## 私有仓库构建
 
@@ -41,13 +41,12 @@ ReaScripts/ReaGBA/
     reagba-webview-x86_64
     reagba-webview-aarch64
   web/
+    app.js
     index.html
-    README.md
-    THIRD_PARTY_NOTICES.md
-    licenses/
+    style.css
 ```
 
-同一版本的 `.ext`、五个平台扩展、Linux 辅助程序和 web 文件必须一起整理提交；仅复制一个 DLL 或只复制源码 UI 不构成完整包。Linux ZIP 保存可执行位，扩展也会在需要时给自己的辅助程序补执行权限。
+同一版本的 `.ext`、5 个平台扩展、2 个 Linux 辅助程序和 3 个 web 文件必须一起整理提交。最终目录除 `.ext` 外正好是 7 个 `extension` 文件和 `app.js`、`index.html`、`style.css`；不再发布 README、第三方声明或 licenses 到 `web`。Linux ZIP 保存可执行位，扩展也会在需要时给自己的辅助程序补执行权限。
 
 `.ext` 由 `scripts/reapack.py` 自动生成。它的下载地址为 `https://raw.githubusercontent.com/zaibuyidao/ReaScripts/$commit/ReaGBA/...`；索引器将 `$commit` 替换为**公开 ReaScripts 仓库的提交**，不会使用私有源码仓库的提交或令牌。每个版本因此固定到对应公开文件。不要手动把它改成私有 Release URL。规则见 [ReaPack 官方打包文档](https://github.com/cfillion/reapack-index/wiki/Packaging-Documentation)。
 
@@ -61,16 +60,16 @@ ReaPack 根据每条 source 的类型和平台安装文件，公开仓库的目�
 REAPER resource directory/
   UserPlugins/reaper_reagba-<architecture>.<dll|dylib|so>
   Scripts/zaibuyidao Scripts/ReaGBA/
+    web/app.js
     web/index.html
-    web/README.md
-    web/THIRD_PARTY_NOTICES.md
-    web/licenses/
+    web/style.css
     extension/reagba-webview-<architecture>  # Linux only
-  Data/ReaGBA/                               # user data, never packaged
+    ROM/                                     # default ROM folder, never packaged
+    config/ saves/ states/ screenshots/ cache/ WebViewData/
 ```
 
 `.ext` 的 extension 条目使用文件名，安装到 `UserPlugins` 根目录；web 和 Linux helper 条目使用 `script nomain` 并保留子目录。安装后重启 REAPER，操作列表中的 **zaibuyidao: ReaGBA** 由原生扩展直接注册，命令 ID `_REAGBA_SHOW`。没有 Lua 启动文件。
 
-新安装将数据保存在 `Data/ReaGBA`；检测到旧 Various/ReaGBA 进度时继续使用它。升级不要删除用户 ROM 和存档。独立平台 ZIP 额外包含 web/manifest.json，ReaPack 包不需要该开发校验清单。
+运行数据固定保存在 `Scripts/zaibuyidao Scripts/ReaGBA`，不会探测或迁移旧地址。升级不要删除用户 ROM 和存档。独立平台 ZIP 额外包含 `web/manifest.json`，ReaPack 包不需要该开发校验清单。
 
 macOS 签名、公证和公开 ReaPack 索引需由维护者按发布流程处理。依赖的固定版本和许可证见 THIRD_PARTY_NOTICES.md；本项目自身的授权条款由仓库所有者确定。

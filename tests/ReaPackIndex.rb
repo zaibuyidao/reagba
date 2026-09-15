@@ -22,9 +22,12 @@ platforms.each do |platform|
   rows = sources.select { |s| s['platform'] == platform }
   native = rows.select { |s| s['type'] == 'extension' }
   raise 'Expected one flat UserPlugins binary per platform' unless native.size == 1 && !native[0]['file'].include?('/')
-  raise 'Missing installed web/index.html' unless rows.any? { |s| s['file'] == 'web/index.html' && s['type'] == 'script' }
+  %w[web/app.js web/index.html web/style.css].each do |file|
+    raise "Missing installed #{file}" unless rows.any? { |s| s['file'] == file && s['type'] == 'script' }
+  end
   raise 'Missing Linux helper' if platform.start_with?('linux') && !rows.any? { |s| s['file'].start_with?('extension/reagba-webview-') && s['type'] == 'script' }
 end
+raise 'Unexpected source count' unless sources.size == 22
 sources.each do |source|
   raise 'Files must not register Lua actions' if source['main']
   raise 'Unexpected private, floating or malformed URL' unless source.text.start_with?('https://raw.githubusercontent.com/zaibuyidao/ReaScripts/' + index.commit + '/ReaGBA/')

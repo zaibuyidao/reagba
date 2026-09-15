@@ -52,10 +52,12 @@ def collect(stage,output,platform):
         if path.is_symlink() or not path.is_file() or not path.stat().st_size:raise ValueError(f'Missing/unsafe install file: {relative}')
         data=path.read_bytes()
         # Common assets must be identical across Windows and Unix packages.
-        if path.suffix in ('.html','.md','.txt'):data=data.replace(b'\r\n',b'\n')
+        if path.suffix in ('.html','.css','.js'):data=data.replace(b'\r\n',b'\n')
         files[relative.as_posix()]=data
-    html=files[(PRODUCT/'web/index.html').as_posix()].decode('utf-8')
-    if any(marker in html for marker in ('/* REAGBA_STYLE */','/* REAGBA_SCRIPT */','@REAGBA_VERSION@')):raise ValueError('UI must be assembled before packaging')
+    ui={name:files[(PRODUCT/'web'/name).as_posix()].decode('utf-8') for name in ('index.html','style.css','app.js')}
+    if any(marker in text for text in ui.values() for marker in ('/* REAGBA_STYLE */','/* REAGBA_SCRIPT */','@REAGBA_VERSION@')):raise ValueError('UI must be directly runnable before packaging')
+    html=ui['index.html']
+    if 'href="style.css"' not in html or 'src="app.js"' not in html:raise ValueError('UI entry must load style.css and app.js')
     metadata={'version':version(),'platform':platform,'action':'_REAGBA_SHOW','action_name':'zaibuyidao: ReaGBA',
               'files':{name:hashlib.sha256(data).hexdigest() for name,data in files.items()}}
     files[(PRODUCT/'web/manifest.json').as_posix()]=json.dumps(metadata,indent=2).encode('utf-8')
@@ -104,7 +106,7 @@ def prepare_publisher(stage,output,platform):
         path=stage/relative
         if not path.is_file():raise ValueError('Missing install file: '+str(path))
         data=path.read_bytes()
-        if path.suffix in ('.html','.md','.txt'):data=data.replace(b'\r\n',b'\n')
+        if path.suffix in ('.html','.css','.js'):data=data.replace(b'\r\n',b'\n')
         files[relative.as_posix()]=data
     publishing=reapack.publisher_files(platform,files);publishing['ReaGBA/ReaGBA.ext']=reapack.manifest().encode('utf-8')
     for name,data in publishing.items():

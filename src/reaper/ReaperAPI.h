@@ -7,7 +7,6 @@
 #define REAPERAPI_WANT_DockIsChildOfDock
 #define REAPERAPI_WANT_Dock_UpdateDockID
 #define REAPERAPI_WANT_GetExtState
-#define REAPERAPI_WANT_SetExtState
 #define REAPERAPI_WANT_GetResourcePath
 #define REAPERAPI_WANT_ShowMessageBox
 #define REAPERAPI_WANT_GetUserFileNameForRead

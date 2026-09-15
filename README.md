@@ -7,7 +7,7 @@ REAPER 内的 GBA 模拟器：**原生扩展 + 系统 WebView 界面 + 原生 mG
 1. 在 ReaPack 中启用公开的 **zaibuyidao Scripts** 仓库，安装或更新 **ReaGBA**。
 2. 完全退出并重新启动 REAPER，使原生扩展被加载。
 3. 在操作列表搜索 **ReaGBA**，运行 **zaibuyidao: ReaGBA**。命令 ID 是 `_REAGBA_SHOW`，可绑定快捷键或工具栏。
-4. 点击“打开 ROM”，选择自己的 `.gba` 文件。也可把游戏放进 REAPER 资源目录的 `Data/ReaGBA/ROM`，然后刷新游戏库。
+4. 点击“打开 ROM”，选择自己的 `.gba` 文件；文件选择器会记住上次打开的位置。也可在设置中选择 ROM 游戏文件夹，默认是 `Scripts/zaibuyidao Scripts/ReaGBA/ROM`。
 
 入口由原生扩展注册，不需要 Lua 启动脚本或 ReaScript 依赖。ReaPack 将当前平台的扩展放入 `UserPlugins`，界面放入 `Scripts/zaibuyidao Scripts/ReaGBA/web`。`.ext` 是 ReaPack 的安装声明，不是用户执行的脚本。安装规则见 [ReaPack 官方打包文档](https://github.com/cfillion/reapack-index/wiki/Packaging-Documentation)。
 
@@ -33,7 +33,7 @@ Linux 的 `extension/reagba-webview-*` 是界面与原生 OpenGL 渲染辅助进
 
 支持暂停、继续、重置、停止、1×/2×/4× 倍率、音量、跳帧、9 个即时存档槽、电池存档、BMP 截图、收藏、搜索和最近游玩。只支持直接加载 `.gba`，ZIP 需先解压。
 
-新安装的数据位于 REAPER 资源目录的 `Data/ReaGBA`，与 ReaPack 管理的界面分开。如果没有新数据目录而检测到旧 `Scripts/zaibuyidao Scripts/Various/ReaGBA/data`，继续使用旧进度；旧 ROM 目录也会被识别，不移动游戏文件。电池存档在暂停、切换游戏、正常关闭及定时检查时保存；即时存档按 ROM SHA-256 和核心版本核对。
+全部运行数据位于 REAPER 资源目录的 `Scripts/zaibuyidao Scripts/ReaGBA`：配置、存档、截图、缓存和 WebView 数据分别写入这里的对应子目录。不会读取或迁移 `Data/ReaGBA` 及旧 `Various/ReaGBA` 地址。设置中选择的 ROM 游戏文件夹和“打开 ROM”最后访问的文件夹都会保存。电池存档在暂停、切换游戏、正常关闭及定时检查时保存；即时存档按 ROM SHA-256 和核心版本核对。
 
 ## 构建与验证
 
@@ -77,7 +77,7 @@ Windows 本地已验证 REAPER 7.78 中注册操作、塞尔达 ROM 运行、音
 
 ## 自动构建
 
-私有源码仓库 `reagba` 独立构建，编辑 `ui/index.html`、`ui/style.css`、`ui/app.js` 后会自动合成发布用的 `web/index.html`。GitHub Actions 为五个平台编译、测试，生成安装 ZIP、原生扩展文件和 **ReaGBA-ReaPack-vX.Y.Z.zip**。该发布包只有 `ReaGBA/extension`、`ReaGBA/web`、`ReaGBA/ReaGBA.ext`。
+私有源码仓库 `reagba` 独立构建。`ui/index.html`、`ui/style.css`、`ui/app.js` 本身就是可运行的发布文件，构建只把这三份文件原样复制到 `web`，不再内联合并。GitHub Actions 为五个平台编译、测试，生成安装 ZIP、原生扩展文件和 **ReaGBA-ReaPack-vX.Y.Z.zip**。ReaPack 发布包固定包含 7 个 `extension` 文件、3 个 `web` 文件和 `ReaGBA.ext`。
 
 维护者自行从私有 Release 下载，将发布包中的 ReaGBA 目录整理进公开的 `ReaScripts/ReaGBA`，再提交并更新 ReaPack 索引。`.ext` 的所有下载地址只指向公开的 ReaScripts 仓库；运行时不需要私有源码仓库、构建工具或 GitHub 认证。工作流不会修改 ReaScripts，也不会自动跨仓库发布。
 

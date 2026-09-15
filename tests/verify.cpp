@@ -13,6 +13,7 @@ static void Require(bool b, const std::string &message) {
     if (!b)
         throw std::runtime_error(message);
 }
+static Json Call(EmulatorManager &manager, Json cmd);
 static std::string FrameHash(const Frame &frame) {
     auto *data = reinterpret_cast<const uint8_t *>(frame.data());
     return SHA256({data, data + sizeof(frame)});
@@ -55,7 +56,27 @@ static void SelfTest() {
     }
     producer.join();
     Require(intact, "Triple buffer tear or old frame");
-    std::cout << "PASS: SHA-256, bounded audio ring, concurrent triple buffer\n";
+    const auto settingsRoot=fs::temp_directory_path()/("reagba-settings-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    const auto defaultROM=settingsRoot/"ReaGBA"/"ROM",customROM=settingsRoot/"Games";
+    fs::create_directories(customROM);
+    {
+        EmulatorManager manager(defaultROM,settingsRoot/"ReaGBA");
+        auto settings=Call(manager,{{"action","get_settings"}}).at("result");
+        Require(fs::u8path(settings.at("rom_directory").get<std::string>())==defaultROM,"Default ROM folder mismatch");
+        Require(Call(manager,{{"action","set_settings"},{"settings",{{"rom_directory",customROM.u8string()}}}}).value("ok",false),"ROM folder setting rejected");
+        Require(!Call(manager,{{"action","set_settings"},{"settings",{{"rom_directory",""}}}}).value("ok",true),"Empty ROM folder accepted");
+        std::ofstream(customROM/"broken.gba",std::ios::binary).put('\0');
+        Require(!Call(manager,{{"action","load_rom"},{"path",(customROM/"broken.gba").u8string()}}).value("ok",true),"Invalid ROM accepted");
+        manager.Shutdown();
+    }
+    {
+        EmulatorManager manager(defaultROM,settingsRoot/"ReaGBA");
+        const auto settings=Call(manager,{{"action","get_settings"}}).at("result");
+        Require(fs::u8path(settings.at("rom_directory").get<std::string>())==customROM,"ROM folder did not survive restart");
+        Require(fs::u8path(settings.at("last_rom_directory").get<std::string>())==customROM,"Last opened ROM folder did not survive restart");
+    }
+    fs::remove_all(settingsRoot);
+    std::cout << "PASS: SHA-256, bounded audio ring, concurrent triple buffer, persisted ROM folders\n";
 }
 static Json Call(EmulatorManager &manager, Json cmd) {
     std::promise<Json> promise;

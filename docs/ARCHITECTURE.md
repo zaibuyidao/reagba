@@ -43,9 +43,9 @@ REAPER 主线程持有容器、UI 请求队列与 WebView。消息回调只入�
 
 ## 本地界面和持久化
 
-`prepare_ui.py` 将 HTML/CSS/JS 合为安装包中的 `web/index.html`，不依赖网络服务。扩展只从 REAPER 资源目录 `Scripts/zaibuyidao Scripts/ReaGBA/web` 加载界面，与源码仓库位置无关。宿主只信任该入口文件，拒绝外部导航、新窗口和 WebView 权限请求。控制队列有数量和字节上限，协议使用请求 ID 匹配异步结果。
+`prepare_ui.py` 校验并原样复制 `index.html`、`style.css`、`app.js`；这三份 UI 源文件可以直接放入安装目录的 `web` 使用，不依赖网络服务或内联构建步骤。扩展会确认三份文件齐全，并只从 REAPER 资源目录 `Scripts/zaibuyidao Scripts/ReaGBA/web` 加载界面。宿主拒绝外部导航、新窗口和 WebView 权限请求。控制队列有数量和字节上限，协议使用请求 ID 匹配异步结果。
 
-ROM 保持只读。新数据存放在资源目录 `Data/ReaGBA`；`RuntimePaths` 兼容旧 Various/ReaGBA 数据目录。存档按 ROM SHA-256 区分，包含核心版本和完整性检查。写入先完成临时文件，再替换目标文件。测试通过显式环境变量隔离数据，诊断输出不会进入发布包。
+ROM 保持只读。`RuntimePaths` 把全部数据固定到资源目录 `Scripts/zaibuyidao Scripts/ReaGBA`，不兼容旧数据地址。ROM 游戏文件夹和最后一次文件选择位置保存在 `config/preferences.json`。存档按 ROM SHA-256 区分，包含核心版本和完整性检查。写入先完成临时文件，再替换目标文件。测试通过显式环境变量隔离数据，诊断输出不会进入发布包。
 
 ## 目录
 

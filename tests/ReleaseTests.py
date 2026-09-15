@@ -11,11 +11,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]/'scripts'))
 import release
 import reapack
 import github_release
+import prepare_ui
 
 class Packages(unittest.TestCase):
     def stage(self, root, platform):
         for relative in release.package_files(platform):
             path=root/relative;path.parent.mkdir(parents=True, exist_ok=True);path.write_bytes(b'fixture')
+        prepare_ui.assemble(release.ROOT/'ui',root/release.PRODUCT/'web',release.version())
         for relative in ('ROM/game.gba','data/states/user.state','runtime/ReaGBA.exe','ReaGBA.lua'):
             path=root/release.PRODUCT/relative;path.parent.mkdir(parents=True, exist_ok=True);path.write_bytes(b'private')
 
@@ -40,6 +42,8 @@ class Packages(unittest.TestCase):
                 expected={'ReaGBA/ReaGBA.ext'}|{'ReaGBA/web/'+name for name in reapack.web_files()}
                 expected|={'ReaGBA/extension/'+name for pair in release.PLATFORMS.values() for name in pair if name}
                 self.assertEqual(set(archive.namelist()),expected)
+                self.assertEqual(len(expected),11)
+                self.assertEqual(reapack.web_files(),['app.js','index.html','style.css'])
                 self.assertEqual(archive.read('ReaGBA/ReaGBA.ext').decode(),reapack.manifest())
                 for name in expected:
                     if release.executable(name):self.assertTrue((archive.getinfo(name).external_attr>>16)&0o100)
@@ -47,7 +51,7 @@ class Packages(unittest.TestCase):
             with zipfile.ZipFile(artifacts/release.asset_name('windows-x64'),'a') as archive:archive.writestr('ROM/private.gba',b'bad')
             with self.assertRaises(ValueError):release.aggregate(artifacts,root/'dist','v'+release.version())
 
-    def test_missing_files_and_unassembled_ui(self):
+    def test_missing_files_and_non_runnable_ui(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);self.stage(root/'stage','windows-x64')
             html=root/'stage'/release.PRODUCT/'web/index.html';html.write_text('/* REAGBA_SCRIPT */')
@@ -56,17 +60,28 @@ class Packages(unittest.TestCase):
             with self.assertRaises(ValueError):release.collect(root/'stage',root/'out','windows-x64')
             with self.assertRaises(ValueError):release.aggregate(root/'empty',root/'out','v'+release.version())
 
+    def test_installed_ui_matches_the_three_sources(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            output=Path(tmp)/'web';prepare_ui.assemble(release.ROOT/'ui',output,release.version())
+            self.assertEqual({p.name for p in output.iterdir()},{'app.js','index.html','style.css'})
+            for name in reapack.web_files():
+                self.assertEqual((output/name).read_bytes(),(release.ROOT/'ui'/name).read_bytes())
+            html=(output/'index.html').read_text(encoding='utf-8')
+            self.assertIn('href="style.css"',html);self.assertIn('src="app.js"',html)
+
     def test_common_web_assets_must_match(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)
+            source=(release.ROOT/'ui/index.html').read_text(encoding='utf-8')
             for platform in release.PLATFORMS:
                 stage=root/platform;self.stage(stage,platform)
                 # Git checkouts can have different line endings on Windows.
-                (stage/release.PRODUCT/'web/index.html').write_bytes(b'html\r\n' if platform=='windows-x64' else b'html\n')
+                newline='\r\n' if platform=='windows-x64' else '\n'
+                (stage/release.PRODUCT/'web/index.html').write_text(source,encoding='utf-8',newline=newline)
                 release.collect(stage,root/'artifacts',platform)
             release.aggregate(root/'artifacts',root/'out','v'+release.version())
             stage=root/'windows-x64'
-            (stage/release.PRODUCT/'web/index.html').write_text('incompatible UI')
+            (stage/release.PRODUCT/'web/index.html').write_text(source.replace('<title>ReaGBA</title>','<title>Incompatible UI</title>'),encoding='utf-8')
             release.collect(stage,root/'artifacts','windows-x64')
             with self.assertRaisesRegex(ValueError,'different web assets'):
                 release.aggregate(root/'artifacts',root/'bad','v'+release.version())

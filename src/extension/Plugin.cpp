@@ -12,6 +12,8 @@
 namespace {
 using namespace reagba;
 reaper_plugin_info_t* plugin = nullptr;
+using GetUserFileNameAPI = bool (*)(int,const char*,const char*,const char*,char*,int);
+GetUserFileNameAPI getUserFileName = nullptr;
 gaccel_register_t accelerator{};
 int showCommand = 0;
 bool closing = false, inTimer = false;
@@ -26,6 +28,7 @@ struct Inbox {
 struct Session {
     bool sdl = false, statusPending = false;
     fs::path root, data, testDirectory;
+    fs::path lastRomDirectory;
     std::unique_ptr<EmulatorManager> manager;
     std::unique_ptr<AudioEngine> audio;
     std::unique_ptr<InputManager> input;
@@ -45,6 +48,10 @@ struct Session {
     }
 };
 std::unique_ptr<Session> session;
+bool IsDocked();
+void PersistDocked() noexcept {
+    try {if(session && session->host)WriteJSON(session->data/"config"/"window.json",{{"docked",IsDocked()}});}catch(...){}
+}
 bool IsDocked() {
     bool floating=false;
     return session && session->host && DockIsChildOfDock(static_cast<HWND>(session->host->Window()),&floating)>=0;
@@ -66,12 +73,12 @@ void SetDocked(bool dock) {
         if(dock) {GetWindowRect(window,&floatingRect);DockWindowAddEx(window,"ReaGBA","ReaGBANativeDock",true);DockWindowActivate(window);}
         else {bool floating=false;const int index=DockIsChildOfDock(window,&floating);if(index>=0)Dock_UpdateDockID("ReaGBANativeDock",index);DockWindowRemove(window);ShowFloating();}
     }
-    SetExtState("ReaGBA","extension_docked",IsDocked()?"1":"0",true);
+    PersistDocked();
 }
 void Close() {
     closing=false;
     if(session && session->host) {
-        SetExtState("ReaGBA","extension_docked",IsDocked()?"1":"0",true);
+        PersistDocked();
         if(IsDocked())DockWindowRemove(static_cast<HWND>(session->host->Window()));
     }
     session.reset();
@@ -86,11 +93,21 @@ void Open() {
     const auto paths=ResolveRuntimePaths(fs::u8path(GetResourcePath()));
     next->root=paths.product;
     const auto ui=paths.web;
-    if(!fs::is_regular_file(ui/"index.html"))throw std::runtime_error("Missing Scripts/zaibuyidao Scripts/ReaGBA/web/index.html. Install the complete ReaGBA package with ReaPack.");
+    for(const auto* name:{"index.html","style.css","app.js"})
+        if(!fs::is_regular_file(ui/name))throw std::runtime_error("Missing Scripts/zaibuyidao Scripts/ReaGBA/web UI files. Install the complete ReaGBA package with ReaPack.");
     next->data=paths.data;
     if(const auto* test=std::getenv("REAGBA_EXTENSION_TEST_DIR");test && *test) {
         next->testDirectory=fs::u8path(test);next->data=next->testDirectory/"data";
     }
+    bool initiallyDocked=false;
+    const auto windowSettings=next->data/"config"/"window.json";
+    if(fs::is_regular_file(windowSettings))try {initiallyDocked=Json::parse(ReadBytes(windowSettings,65536)).value("docked",false);}catch(...){}
+    const auto preferencesPath=next->data/"config"/"preferences.json";
+    if(fs::is_regular_file(preferencesPath))try {
+        const auto preferences=Json::parse(ReadBytes(preferencesPath,1024*1024));
+        const auto initial=preferences.value("last_rom_directory",preferences.value("rom_directory",std::string()));
+        if(!initial.empty())next->lastRomDirectory=fs::u8path(initial);
+    }catch(...){}
     SDL_SetMainReady();
     if(SDL_InitSubSystem(SDL_INIT_AUDIO|SDL_INIT_GAMECONTROLLER)!=0)throw std::runtime_error(SDL_GetError());
     next->sdl=true;
@@ -122,7 +139,7 @@ void Open() {
     next->host=CreateWebViewHost(std::move(config));
     session=std::move(next);
     GetWindowRect(static_cast<HWND>(session->host->Window()),&floatingRect);
-    if(std::string(GetExtState("ReaGBA","extension_docked"))=="1")SetDocked(true);else ShowFloating();
+    if(initiallyDocked)SetDocked(true);else {ShowFloating();PersistDocked();}
 }
 Json Viewport(const Json& command) {
     const auto& v=command.at("rect");
@@ -145,8 +162,22 @@ void Request(Json command) {
         else {
             if(action=="open_rom") {
                 char path[8192]{};
-                if(!GetUserFileNameForRead(path,"ReaGBA: Open GBA ROM","gba")) {reply["result"]=nullptr;session->host->Post(reply.dump());return;}
+                bool selected=false;
+                if(getUserFileName) {
+                    auto initial=session->lastRomDirectory.u8string();
+                    if(initial.empty() && command.value("initial_path",Json()).is_string())initial=command["initial_path"].get<std::string>();
+                    selected=getUserFileName(1,"ReaGBA: Open GBA ROM",initial.c_str(),"GBA ROM|*.gba",path,sizeof(path));
+                } else selected=GetUserFileNameForRead(path,"ReaGBA: Open GBA ROM","gba");
+                if(!selected) {reply["result"]=nullptr;session->host->Post(reply.dump());return;}
+                session->lastRomDirectory=fs::u8path(path).parent_path();
                 command={{"action","load_rom"},{"path",path},{"id",id}};
+            } else if(action=="select_rom_directory") {
+                if(!getUserFileName)throw std::runtime_error("This REAPER version does not provide a folder chooser");
+                char path[8192]{};
+                auto initial=command.value("initial_path",Json()).is_string()?command["initial_path"].get<std::string>():std::string();
+                if(!getUserFileName(3,"ReaGBA: Select ROM Folder",initial.c_str(),"",path,sizeof(path))) {reply["result"]=nullptr;session->host->Post(reply.dump());return;}
+                session->lastRomDirectory=fs::u8path(path);
+                command={{"action","set_settings"},{"settings",{{"rom_directory",path},{"last_rom_directory",path}}},{"id",id}};
             }
             const auto actual=command.at("action").get<std::string>();
             auto inbox=session->inbox;
@@ -224,10 +255,10 @@ int WindowInfo(HWND window,INT_PTR type) {
 extern "C" REAPER_PLUGIN_DLL_EXPORT int REAPER_PLUGIN_ENTRYPOINT(REAPER_PLUGIN_HINSTANCE,reaper_plugin_info_t* rec) {
     if(!rec) {
         if(plugin) {plugin->Register("-timer",reinterpret_cast<void*>(Timer));plugin->Register("-hookcommand",reinterpret_cast<void*>(OnCommand));plugin->Register("-hwnd_info",reinterpret_cast<void*>(WindowInfo));plugin->Register("-gaccel",&accelerator);}
-        try{Close();}catch(...){}plugin=nullptr;return 0;
+        try{Close();}catch(...){}plugin=nullptr;getUserFileName=nullptr;return 0;
     }
     if(rec->caller_version!=REAPER_PLUGIN_VERSION || !rec->GetFunc || REAPERAPI_LoadAPI(rec->GetFunc))return 0;
-    plugin=rec;showCommand=rec->Register("command_id",const_cast<char*>("REAGBA_SHOW"));if(!showCommand)return 0;
+    plugin=rec;getUserFileName=reinterpret_cast<GetUserFileNameAPI>(rec->GetFunc("GetUserFileName"));showCommand=rec->Register("command_id",const_cast<char*>("REAGBA_SHOW"));if(!showCommand)return 0;
     accelerator.accel.cmd=static_cast<unsigned short>(showCommand);accelerator.desc="zaibuyidao: ReaGBA";
     rec->Register("gaccel",&accelerator);rec->Register("hookcommand",reinterpret_cast<void*>(OnCommand));
     rec->Register("hwnd_info",reinterpret_cast<void*>(WindowInfo));rec->Register("timer",reinterpret_cast<void*>(Timer));
