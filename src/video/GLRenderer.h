@@ -81,7 +81,7 @@ class GLRenderer {
         glUniform2f(sourceSize_, float(Width), float(Height));
         glUniform2f(outputSize_, float(w), float(h));
         glUniform1i(shaderPreset_, int(s.shader));
-        const auto filter = s.linear && s.shader == ShaderPreset::None ? GL_LINEAR : GL_NEAREST;
+        const auto filter = s.linear && s.shader == ShaderPreset::Off ? GL_LINEAR : GL_NEAREST;
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
         glDrawArrays(GL_TRIANGLES, 0, 3);

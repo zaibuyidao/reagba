@@ -94,7 +94,7 @@ void D3DRenderer::Draw(VideoSettings settings) {
     auto *r = resource_.Get();
     context_->PSSetShaderResources(0, 1, &r);
     // Presets own their sampling; the plain texture filter is restored on "none".
-    auto *s = settings.linear && settings.shader == ShaderPreset::None ? linear_.Get() : nearest_.Get();
+    auto *s = settings.linear && settings.shader == ShaderPreset::Off ? linear_.Get() : nearest_.Get();
     context_->PSSetSamplers(0, 1, &s);
     const shaders::Uniforms values{float(Width), float(Height), view.Width, view.Height, int(settings.shader)};
     context_->UpdateSubresource(uniforms_.Get(), 0, nullptr, &values, 0, 0);

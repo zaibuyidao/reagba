@@ -69,7 +69,7 @@ int main(int argc, char** argv) try {
     }
     if (ParseShaderPreset("lcd3x")!=ShaderPreset::LCD3x ||
         ParseShaderPreset("lcd-grid-v2")!=ShaderPreset::LCDGridV2 ||
-        ParseShaderPreset("broken")!=ShaderPreset::None || IsShaderPreset("broken"))
+        ParseShaderPreset("broken")!=ShaderPreset::Off || IsShaderPreset("broken"))
         throw std::runtime_error("Shader name mapping failed");
     ComPtr<ID3D11Device> device;
     ComPtr<ID3D11DeviceContext> context;
