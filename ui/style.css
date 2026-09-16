@@ -30,6 +30,12 @@ footer{height:26px;padding:0 20px;display:flex;align-items:center;gap:7px;border
 #library-splitter:hover span,#library-splitter:focus-visible span,.resizing-library #library-splitter span{background:var(--green);width:46px}.resizing-library,.resizing-library *{cursor:row-resize!important;user-select:none!important}
 .library-collapsed #library-view{margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--line)}.settings-open #library-splitter{display:none}
 #empty{flex:1;min-height:0;overflow:auto}
+/* Mint GBA on a 32x20 integer grid: mirrored shell, equal control footprints, 3:2 screen. */
+.brand{gap:8px;letter-spacing:-.7px;line-height:1}
+.brand-name{font-weight:650}.brand-name>span{font-weight:800;color:#c5f3dc}
+.brand small{font-size:7px;letter-spacing:2px;margin-top:7px;font-weight:500;color:#8ba7a7}
+.logo{display:block;width:32px;min-width:32px;height:20px;flex:none;border-radius:0;background:none;image-rendering:pixelated}
+@media(max-width:360px){.brand{gap:6px}}
 /* Library display modes share the same cards and controls. Covers retain their full artwork. */
 #library-body nav{gap:12px;flex-wrap:wrap;align-items:center}
 #library-display{margin-left:auto;padding:5px 7px;margin-bottom:7px;font-size:11px;max-width:110px}
