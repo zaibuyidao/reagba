@@ -21,7 +21,7 @@ REAPER 内的 GBA 模拟器：**原生扩展 + 系统 WebView 界面 + 原生 mG
 | linux-x86_64 | reaper_reagba-x86_64.so | WebKitGTK 4.1，X11/XWayland |
 | linux-aarch64 | reaper_reagba-aarch64.so | WebKitGTK 4.1，X11/XWayland |
 
-Linux 的 `extension/reagba-webview-*` 是界面与原生 OpenGL 渲染辅助进程，用来隔离 REAPER 与 WebKitGTK 的 GDK 版本。GBA 核心、音频、存档仍在扩展中；辅助进程通过共享内存接收帧，像素不经过 JavaScript。原生 Wayland 停靠尚不支持。Ubuntu 24.04 的运行依赖为 `libwebkit2gtk-4.1-0 libepoxy0 libasound2t64`。
+Linux 的 `extension/reagba-webview-*` 是界面与原生 OpenGL 渲染辅助进程，用来隔离 REAPER 与 WebKitGTK 的 GDK 版本。GBA 核心、音频、存档仍在扩展中；辅助进程通过共享内存接收帧，像素不经过 JavaScript。原生 Wayland 停靠尚不支持。Ubuntu 24.04 的运行依赖为 `libwebkit2gtk-4.1-0 libepoxy0 libasound2t64 libcurl4t64`。
 
 正式安装包不包含 `ReaGBA.exe`、验证程序、ROM、BIOS 或用户数据。macOS 包尚未签名或公证。
 
@@ -32,6 +32,12 @@ Linux 的 `extension/reagba-webview-*` 是界面与原生 OpenGL 渲染辅助进
 右上角“停靠 / 取消停靠”切换 REAPER Docker 与浮动窗口，切换时保留正在运行的核心。界面只采用上下布局：游戏库在上，游戏画面在开始/暂停按钮上方。画面区域保持 GBA 的 3:2 比例；额外高度用于游戏库。拖动中间分隔条可改变占比，双击恢复自动分配。整数缩放可能产生少量黑边，可在设置中关闭。
 
 支持暂停、继续、重置、停止、1×/2×/4× 倍率、音量、跳帧、9 个即时存档槽、电池存档、BMP 截图、收藏、搜索和最近游玩。只支持直接加载 `.gba`，ZIP 需先解压。
+
+游戏库顶部可切换 **详细列表、封面网格、紧凑列表**，设置页也可选择，重开后保留。详细列表显示封面、文件大小与游玩时长；封面网格以大封面排列；紧凑列表缩小行高，仅保留小图标、标题、收藏和游玩按钮。
+
+设置 → 游戏库 → **自动下载游戏封面** 默认关闭。开启后读取 `.gba` 文件头中的四位游戏编号，在本地匹配 [Libretro GBA 元数据](https://github.com/libretro/libretro-database/blob/master/metadat/no-intro/Nintendo%20-%20Game%20Boy%20Advance.dat)，再从 [Libretro GBA 封面库](https://github.com/libretro-thumbnails/Nintendo_-_Game_Boy_Advance) 下载对应地区的封面，不上传 ROM、文件名或本地路径。下载在独立线程完成，图片缓存到 `cache/covers`；关闭自动下载后，已缓存封面仍可离线显示。未匹配、下载失败或图片损坏时显示游戏编号首字母（编号为空时取标题首字符）。汉化/改版沿用原编号时通常显示原版封面，自制游戏或修改编号的 ROM 可能无封面。
+
+封面编号索引缓存 30 天；未匹配结果缓存 7 天，网络错误退避 10 分钟，避免重复请求。到期后重新扫描或重开界面可重试。封面按完整比例显示，不裁剪；网格模式默认至少为一行封面留出空间，也可用分隔条调整。
 
 设置 → 画面 → **Shader** 可选择关闭（默认）、**LCD3X** 或 **lcd-grid-v2**，选择立即生效并自动保存。Windows 的 D3D11 与 macOS/Linux 的 OpenGL 使用同一套效果公式；建议整数倍缩放，LCD3X 在 3× 以上更明显。Shader 启用时接管纹理采样，关闭后恢复原先的纹理过滤设置。效果内置在扩展/辅助进程中，不增加 `web` 文件；目前是两个固定预设，不支持导入任意 `.glslp` / `.slangp`。截图仍保存核心原始画面，不叠加显示 shader。
 
@@ -50,7 +56,7 @@ python scripts/build.py
 Linux 开发依赖：
 
 ```sh
-sudo apt-get install build-essential cmake ninja-build git python3 pkg-config libx11-dev libgtk-3-dev libwebkit2gtk-4.1-dev libepoxy-dev libasound2-dev libudev-dev
+sudo apt-get install build-essential cmake ninja-build git python3 pkg-config libx11-dev libgtk-3-dev libwebkit2gtk-4.1-dev libepoxy-dev libasound2-dev libudev-dev libcurl4-openssl-dev
 ```
 
 手动构建和打包：
@@ -76,6 +82,8 @@ python scripts/extension_smoke.py --reaper C:/REAPER/reaper.exe --rom ./ROM/game
 扩展测试使用独立的 `build/extension-smoke` REAPER 配置和 `verification` 存档，不操作日常工程。无 ROM 的 CTest 覆盖核心边界、Windows 键位、WebView 通信、发布包边界和 Linux 共享帧恢复。可选的布局测试需要 Playwright：`npm install --no-save playwright`、`npx playwright install chromium` 后运行 `node tests/layout_verify.cjs`。
 
 设置页回归测试：`node tests/settings_verify.cjs`，检查不同宽高下无横向溢出、shader 保存/恢复、三份 UI 文件直接加载。Windows 的 `native_shaders` CTest 用 WARP 离屏渲染两个预设，与独立 CPU 数学参考逐像素抽样比对；运行 `reagba_shader_verify verification/shaders` 后还可执行 `node tests/shaders_gl_verify.cjs`，将同一 GLSL 程序转为 GLSL ES 3.0，在 WebGL2 中与 D3D 输出比对（不代替 macOS/Linux 实机 OpenGL 验收）。
+
+游戏库回归测试：`node tests/library_verify.cjs`，覆盖三种视图、五种宽度、完整封面与字母回退、显示方式持久化、收藏/搜索/排序与键盘启动。`library_covers` CTest 使用替代下载器验证离线缓存、编号匹配、开关取消、损坏文件及重试限制，无需联网；`reagba_covers_verify --online BZME` 可选验证真实 HTTPS 封面下载。
 
 Windows 本地已验证 REAPER 7.78 中注册操作、塞尔达 ROM 运行、音频设备、停靠/取消停靠及存读档。macOS 和 Linux 的桌面停靠、音频设备、实体手柄仍需对应系统实机验收；GitHub Actions 编译成功不能替代这些检查。详细验证范围见 [docs/VALIDATION.md](docs/VALIDATION.md)。
 

@@ -14,10 +14,15 @@ ReaGBA 使用以下上游依赖。ROM、Nintendo BIOS 和用户进度不在源�
 | [Microsoft WebView2 SDK](https://www.nuget.org/packages/Microsoft.Web.WebView2/1.0.1150.38) | 1.0.1150.38 | Windows 头文件及静态 Loader；Microsoft 许可，系统 Runtime 不打包 |
 | Apple WKWebView / OpenGL | 系统框架 | 系统动态链接，不打包 |
 | GTK3 / WebKitGTK 4.1 / libepoxy / X11 | Linux 系统库 | 动态链接，不打包；各组件保留其上游许可 |
+| WinHTTP / libcurl | Windows / macOS / Linux 系统库 | 可选封面下载；Windows 系统 WinHTTP，macOS/Linux 动态链接系统 libcurl，不打包；[curl license](https://curl.se/docs/copyright.html) |
 
 对应许可证文本位于 licenses。mGBA 的 MPL 文件、blip_buf 的 LGPL 文件及其余依赖以各自许可证为准，应用源码不会更改这些授权。完整应用构建脚本与固定依赖源码入口随仓库提供，可用于修改依赖并重新链接。依赖下载在 third_party 或构建目录内进行，既有目录优先用于本地开发；干净 CI 从上述固定版本获取。
 
 REAPER 宿主实现和发布流程参考同一作者的 [Sendmanager](https://github.com/zaibuyidao/Sendmanager)。应用自身的发布授权由仓库所有者另行声明。
+
+## 可选封面数据
+
+用户开启自动下载后，运行时从 [libretro-database 的 GBA no-intro 元数据](https://github.com/libretro/libretro-database/blob/master/metadat/no-intro/Nintendo%20-%20Game%20Boy%20Advance.dat) 读取游戏编号对应名称，再从 [libretro-thumbnails/Nintendo_-_Game_Boy_Advance](https://github.com/libretro-thumbnails/Nintendo_-_Game_Boy_Advance) 获取 Named_Boxarts 图片。索引与图片只保存在用户缓存，不随源码或安装包分发。封面图像的权利属于相应权利人。
 
 ## 内置 LCD 效果
 

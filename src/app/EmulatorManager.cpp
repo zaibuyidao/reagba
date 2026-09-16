@@ -10,7 +10,7 @@
 namespace reagba {
 using Clock = std::chrono::steady_clock;
 EmulatorManager::EmulatorManager(fs::path romDir, fs::path dataDir)
-    : saves_(std::move(dataDir)), romDir_(std::move(romDir)) {
+    : saves_(std::move(dataDir)), covers_(saves_.Root() / "cache" / "covers"), romDir_(std::move(romDir)) {
     auto config = saves_.Root() / "config" / "preferences.json";
     if (fs::exists(config))
         try {
@@ -26,6 +26,12 @@ EmulatorManager::EmulatorManager(fs::path romDir, fs::path dataDir)
         preferences_["rom_directory"].get<std::string>().empty())
         preferences_["rom_directory"] = romDir_.u8string();
     NormalizeKeys(preferences_);
+    if (!preferences_.contains("auto_download_covers") || !preferences_["auto_download_covers"].is_boolean())
+        preferences_["auto_download_covers"] = false;
+    if (!preferences_.contains("library_view") || !preferences_["library_view"].is_string() ||
+        !IsLibraryView(preferences_["library_view"].get<std::string>()))
+        preferences_["library_view"] = "details";
+    covers_.Enable(preferences_["auto_download_covers"].get<bool>());
     if (!preferences_.contains("shader") || !preferences_["shader"].is_string() ||
         !IsShaderPreset(preferences_["shader"].get<std::string>()))
         preferences_["shader"] = "none";
@@ -42,6 +48,7 @@ void EmulatorManager::Shutdown() {
     cv_.notify_all();
     if (worker_.joinable())
         worker_.join();
+    covers_.Shutdown();
 }
 void EmulatorManager::Submit(Json command, Reply reply) {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -94,10 +101,17 @@ Json EmulatorManager::Handle(const Json &cmd) {
     }
     if (action == "get_settings")
         return preferences_;
+    if (action == "get_cover")
+        return covers_.Get(cmd.at("code").get<std::string>());
     if (action == "set_settings") {
         auto settings = cmd.at("settings");
         if (!settings.is_object())
             throw std::runtime_error("settings must be an object");
+        if (settings.contains("auto_download_covers") && !settings["auto_download_covers"].is_boolean())
+            throw std::runtime_error("Automatic cover download must be a boolean");
+        if (settings.contains("library_view") && (!settings["library_view"].is_string() ||
+            !IsLibraryView(settings["library_view"].get<std::string>())))
+            throw std::runtime_error("Unknown library view (expected details, grid or compact)");
         if (settings.contains("shader") &&
             (!settings["shader"].is_string() || !IsShaderPreset(settings["shader"].get<std::string>())))
             throw std::runtime_error("Unknown shader preset (expected none, lcd3x or lcd-grid-v2)");
@@ -117,9 +131,11 @@ Json EmulatorManager::Handle(const Json &cmd) {
             if (it.key() == "keys" || it.key() == "integer_scaling" || it.key() == "filter" ||
                 it.key() == "bios" || it.key() == "vsync" || it.key() == "fast_forward_key" ||
                 it.key() == "library_split" || it.key() == "rom_directory" ||
-                it.key() == "last_rom_directory" || it.key() == "shader")
+                it.key() == "last_rom_directory" || it.key() == "shader" ||
+                it.key() == "auto_download_covers" || it.key() == "library_view")
                 preferences_[it.key()] = it.value();
         Persist();
+        covers_.Enable(preferences_.value("auto_download_covers", false));
         return preferences_;
     }
     if (action == "favorite") {

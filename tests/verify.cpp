@@ -64,6 +64,14 @@ static void SelfTest() {
         auto settings=Call(manager,{{"action","get_settings"}}).at("result");
         Require(fs::u8path(settings.at("rom_directory").get<std::string>())==defaultROM,"Default ROM folder mismatch");
         Require(settings.at("shader")=="none","Shader must default to off");
+        Require(settings.at("auto_download_covers")==false,"Covers must default to offline");
+        Require(settings.at("library_view")=="details","Default library view mismatch");
+        for (const auto *view : {"grid", "details", "compact"})
+            Require(Call(manager,{{"action","set_settings"},{"settings",{{"library_view",view}}}}).at("result").at("library_view")==view,"Library view rejected");
+        for (const Json &view : {Json("invalid"),Json(1),Json(nullptr)})
+            Require(!Call(manager,{{"action","set_settings"},{"settings",{{"library_view",view}}}}).value("ok",true),"Invalid library view accepted");
+        Require(!Call(manager,{{"action","set_settings"},{"settings",{{"auto_download_covers","true"}}}}).value("ok",true),"Invalid cover setting accepted");
+        Require(Call(manager,{{"action","set_settings"},{"settings",{{"auto_download_covers",true}}}}).at("result").at("auto_download_covers")==true,"Cover setting rejected");
         for(const auto* preset:{"lcd3x","none","lcd-grid-v2"})
             Require(Call(manager,{{"action","set_settings"},{"settings",{{"shader",preset}}}}).at("result").at("shader")==preset,"Shader preset rejected");
         for(const Json& preset:{Json("unknown"),Json(1),Json(nullptr),Json::object()})
@@ -80,6 +88,8 @@ static void SelfTest() {
         Require(fs::u8path(settings.at("rom_directory").get<std::string>())==customROM,"ROM folder did not survive restart");
         Require(fs::u8path(settings.at("last_rom_directory").get<std::string>())==customROM,"Last opened ROM folder did not survive restart");
         Require(settings.at("shader")=="lcd-grid-v2","Shader did not survive restart");
+        Require(settings.at("library_view")=="compact","Library view did not survive restart");
+        Require(settings.at("auto_download_covers")==true,"Cover setting did not survive restart");
     }
     fs::remove_all(settingsRoot);
     std::cout << "PASS: SHA-256, bounded audio ring, concurrent triple buffer, persisted ROM folders and shaders\n";

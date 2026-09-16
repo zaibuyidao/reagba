@@ -24,6 +24,7 @@ void WebBridge::Request(const std::string &text, EmulatorManager::Reply reply) {
                                                       "get_emulator_state",
                                                       "get_save_states",
                                                       "scan_roms",
+                                                      "get_cover",
                                                       "favorite",
                                                       "get_settings",
                                                       "set_settings"};

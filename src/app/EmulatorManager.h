@@ -1,6 +1,7 @@
 #pragma once
 #include "core/IEmulatorCore.h"
 #include "rom/ROMManager.h"
+#include "rom/CoverManager.h"
 #include "save/SaveManager.h"
 #include "video/FrameBuffer.h"
 #include "audio/AudioBuffer.h"
@@ -44,6 +45,7 @@ class EmulatorManager {
     std::unique_ptr<IEmulatorCore> core_;
     ROMInfo current_;
     SaveManager saves_;
+    CoverManager covers_;
     fs::path romDir_;
     Json preferences_ = Json::object(), library_ = Json::array();
     bool running_ = false;

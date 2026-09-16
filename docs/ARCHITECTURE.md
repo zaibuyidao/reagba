@@ -14,6 +14,9 @@ flowchart TD
     Frames --> GPU[原生 GPU 视图]
     Input[原生键盘 / SDL 手柄] --> Manager
     Manager --> Save[ROM 元数据 / 配置 / 存档]
+    Manager -->|非阻塞 get_cover| Covers[独立封面 IO 线程]
+    Covers --> Cache[封面 PNG / 编号索引缓存]
+    Covers -->|用户开启后 HTTPS| Libretro[Libretro 公开数据源]
     Manager -->|异步结果与状态快照| UI
 ```
 
@@ -46,6 +49,10 @@ REAPER 主线程持有容器、UI 请求队列与 WebView。消息回调只入�
 `prepare_ui.py` 校验并原样复制 `index.html`、`style.css`、`app.js`；这三份 UI 源文件可以直接放入安装目录的 `web` 使用，不依赖网络服务或内联构建步骤。扩展会确认三份文件齐全，并只从 REAPER 资源目录 `Scripts/zaibuyidao Scripts/ReaGBA/web` 加载界面。宿主拒绝外部导航、新窗口和 WebView 权限请求。控制队列有数量和字节上限，协议使用请求 ID 匹配异步结果。
 
 ROM 保持只读。`RuntimePaths` 把全部数据固定到资源目录 `Scripts/zaibuyidao Scripts/ReaGBA`，不兼容旧数据地址。ROM 游戏文件夹和最后一次文件选择位置保存在 `config/preferences.json`。存档按 ROM SHA-256 区分，包含核心版本和完整性检查。写入先完成临时文件，再替换目标文件。测试通过显式环境变量隔离数据，诊断输出不会进入发布包。
+
+`CoverManager` 在独立线程读写 `cache/covers` 并下载封面，模拟线程的 `get_cover` 只排队或取回结果；图片每次单独通过 PNG data URI 发送，游戏帧仍不进入界面脚本。待处理结果上限 32，读取后释放图片内存。Windows 使用系统 WinHTTP，macOS 使用系统 libcurl，Linux 使用发行版 libcurl；HTTPS 证书验证保持开启，固定请求 `raw.githubusercontent.com`，不跟随重定向。索引最多 8 MiB、PNG 最多 1 MiB，图片尺寸上限 2048×2048，连接/读取及总耗时受限；下载中关闭开关会取消后续请求。WebView 的 CSP 仍禁止联网。
+
+ROM 四位编号在本地匹配 Libretro no-intro DAT 的 serial/name，按上游文件命名规则编码 Named_Boxarts 路径。不存在条目或图片时回退字母；不会用模糊文件名匹配其他游戏。正向缓存长期保留，索引 30 天更新，未匹配与网络错误分别退避 7 天、10 分钟。`auto_download_covers` 默认为 false，`library_view` 默认为 details，可选 grid/compact；两者校验后写入 preferences.json。
 
 ## 目录
 

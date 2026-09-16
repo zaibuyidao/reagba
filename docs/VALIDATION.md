@@ -14,6 +14,10 @@ CTest 覆盖核心参数与缓冲边界、默认键位及短按/组合键/失焦
 
 `settings_verify.cjs` 用三份实际 UI 文件及模拟原生桥，在 240×500 至 1920×2000 的 10 种尺寸中确认设置区域 `scrollWidth <= clientWidth`、BIOS 按钮可达、冗余键位说明已移除、shader 选项保存/重开恢复，以及 JavaScript/CSP 无错误。浏览器测试显式保留滚动条；修复前该测试定位到音量 range 的默认左右 margin 导致 4 像素溢出。
 
+2026-09-16 游戏库封面与显示方式：Windows Release DLL 构建通过，8 项 CTest 全部通过（含新增 `library_covers`）；实际 WinHTTP 请求根据 BZME 编号下载到《塞尔达传说：缩小帽》PNG。封面测试覆盖改名 ROM 的内部编号、默认不联网、下载开关、串行后台队列、缓存重开/离线读取、缺失封面、损坏图片/索引/状态缓存恢复、失败重试限制和取消。WSL Ubuntu 24.04 使用系统 libcurl 编译同一封面模块并通过其原生测试；未重新构建完整 Linux 扩展或验证 macOS。
+
+`library_verify.cjs` 用真实三份 UI 和模拟原生桥，在 240、298、440、760、1280 五种宽度检查详细/网格/紧凑三种模式无横向溢出，网格行高容纳完整封面，紧凑行高不超过 48px；检查缓存图片、异步下载、失败字母回退、设置持久化、搜索/收藏/排序、回车启动。三种模式截图已目视检查；原有 8 尺寸布局和 10 尺寸设置回归均通过。本次未重新运行 REAPER 宿主 smoke 测试。
+
 路径测试确认配置、存档、截图、缓存和 WebView 数据都位于 `Scripts/zaibuyidao Scripts/ReaGBA`，且旧地址不会被使用。安装 ZIP 的 `web` 只含三份可直接运行且与源码一致的 UI 文件；`.ext` 使用实际 reapack-index 检查五个平台的 22 个 source、公开 ReaScripts 提交链接及不注册脚本的文件映射。打包测试覆盖固定的 7 个扩展文件、3 个 UI 文件、五平台汇总、公共 UI 一致性、私有数据排除和缺失文件。
 
 ## 跨平台边界
@@ -30,6 +34,8 @@ WSL Ubuntu 24.04 中已成功编译 Linux x86_64 扩展和 GTK3/WebKitGTK 辅助
 - `python scripts/extension_smoke.py --reaper <reaper.exe> --rom <ROM.gba>`：隔离 REAPER 扩展测试。
 - `node tests/layout_verify.cjs`：安装 Playwright 后验证响应式界面。
 - `node tests/settings_verify.cjs`：设置页滚动与 shader 选择保存测试。
+- `node tests/library_verify.cjs`：三种游戏库视图、封面回退和交互回归。
+- `reagba_covers_verify`：无需网络的封面模块测试；追加 `--online BZME` 检查真实来源，写入 `verification/covers-online`。
 - Windows `reagba_shader_verify verification/shaders`：D3D 编译/像素参考测试，导出 GPU 结果。
 - `node tests/shaders_gl_verify.cjs`：以上导出结果的 WebGL2/GLSL ES 跨后端比对。
 - `ruby tests/ReaPackIndex.rb <generated ReaGBA.ext> <temporary index.xml>`：安装 reapack-index 1.2.3 后验证真实索引格式，不写公开仓库的 index.xml。
