@@ -7,7 +7,7 @@ REAPER 内的 GBA 模拟器：**原生扩展 + 系统 WebView 界面 + 原生 mG
 1. 在 ReaPack 中启用公开的 **zaibuyidao Scripts** 仓库，安装或更新 **ReaGBA**。
 2. 完全退出并重新启动 REAPER，使原生扩展被加载。
 3. 在操作列表搜索 **ReaGBA**，运行 **zaibuyidao: ReaGBA**。命令 ID 是 `_REAGBA_SHOW`，可绑定快捷键或工具栏。
-4. 点击“打开 ROM”，选择自己的 `.gba` 文件；文件选择器会记住上次打开的位置。也可在设置中选择 ROM 游戏文件夹，默认是 `Scripts/zaibuyidao Scripts/ReaGBA/ROM`。
+4. 点击“打开 ROM”，选择自己的 `.gba` 文件；文件选择器会记住上次打开的位置。也可在设置中选择 ROM 游戏文件夹，此项默认留空，用户选择后才保存并扫描。
 
 入口由原生扩展注册，不需要 Lua 启动脚本或 ReaScript 依赖。ReaPack 将当前平台的扩展放入 `UserPlugins`，界面放入 `Scripts/zaibuyidao Scripts/ReaGBA/web`。`.ext` 是 ReaPack 的安装声明，不是用户执行的脚本。安装规则见 [ReaPack 官方打包文档](https://github.com/cfillion/reapack-index/wiki/Packaging-Documentation)。
 

@@ -22,9 +22,8 @@ EmulatorManager::EmulatorManager(fs::path romDir, fs::path dataDir)
     if (preferences_.contains("volume") && preferences_["volume"].is_number())
         volume.store(std::clamp(preferences_["volume"].get<float>(), 0.f, 1.f));
     fs::create_directories(romDir_);
-    if (!preferences_.contains("rom_directory") || !preferences_["rom_directory"].is_string() ||
-        preferences_["rom_directory"].get<std::string>().empty())
-        preferences_["rom_directory"] = romDir_.u8string();
+    if (!preferences_.contains("rom_directory") || !preferences_["rom_directory"].is_string())
+        preferences_["rom_directory"] = "";
     NormalizeKeys(preferences_);
     if (!preferences_.contains("auto_download_covers") || !preferences_["auto_download_covers"].is_boolean())
         preferences_["auto_download_covers"] = false;
@@ -89,8 +88,8 @@ Json EmulatorManager::Handle(const Json &cmd) {
         return State();
     if (action == "scan_roms") {
         auto path = cmd.contains("directory") ? fs::u8path(cmd.at("directory").get<std::string>())
-                                               : fs::u8path(preferences_.value("rom_directory", romDir_.u8string()));
-        library_ = ScanROMs(path);
+                                               : fs::u8path(preferences_.value("rom_directory", std::string()));
+        library_ = path.empty() ? Json::array() : ScanROMs(path);
         for (auto &r : library_) {
             auto key = r["path"].get<std::string>();
             r["favorite"] = preferences_.value("favorites", Json::object()).value(key, false);

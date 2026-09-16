@@ -73,7 +73,7 @@ static void SelfTest() {
     {
         EmulatorManager manager(defaultROM,settingsRoot/"ReaGBA");
         auto settings=Call(manager,{{"action","get_settings"}}).at("result");
-        Require(fs::u8path(settings.at("rom_directory").get<std::string>())==defaultROM,"Default ROM folder mismatch");
+        Require(settings.at("rom_directory")=="","ROM folder must remain empty until selected");
         Require(settings.at("shader")=="none","Shader must default to off");
         Require(settings.at("auto_download_covers")==false,"Covers must default to offline");
         Require(settings.at("library_view")=="details","Default library view mismatch");
