@@ -38,11 +38,11 @@ REAPER 主线程持有容器、UI 请求队列与 WebView。消息回调只入�
 
 ## 停靠、输入和布局
 
-`DockWindowAddEx / DockWindowRemove / DockWindowActivate` 在同一个容器上切换 Docker 与浮动窗口，不重建核心。停靠状态保存到 REAPER ExtState；ROM 和进度独立于 REAPER 工程。
+`DockWindowAddEx / DockWindowRemove / DockWindowActivate` 在同一个容器上切换 Docker 与浮动窗口，不重建核心。浮动窗口位置、尺寸、停靠状态和 Docker 编号保存到 `config/window.json`；Windows 也保存最大化状态，最小化时读取正常窗口位置。窗口变化停止 500 ms 后保存，切换停靠及关闭时立即保存。停靠窗口不覆盖浮动尺寸。ROM 和进度独立于 REAPER 工程。
 
-键盘处理在原生层完成：Windows VK/scancode + WebView2 AcceleratorKeyPressed；macOS NSEvent 物理 scancode；Linux GTK 按键事件通过本地 IPC 送到扩展。只接受 ReaGBA 焦点内的输入，搜索和设置时屏蔽游戏键；短按保留到下次轮询，失焦清空。R 加速用独立标志，松开恢复原倍率。
+键盘处理在原生层完成：Windows VK/scancode + WebView2 AcceleratorKeyPressed；macOS NSEvent 物理 scancode；Linux GTK 按键事件通过本地 IPC 送到扩展。只接受 ReaGBA 焦点内的输入，搜索和设置时屏蔽游戏键；短按保留到下次轮询，失焦清空。默认 L 加速用独立标志，松开恢复原倍率；肩键 R/L 默认为 Q/O。页面从当前键位设置生成启动提示，包括自定义方向、肩键和加速键。
 
-页面保持上下布局。DOM 计算 3:2 游戏区、库列表高度与裁剪矩形，宿主将矩形转换为实际像素。Windows 用窗口区域留出 D3D 视图，macOS/Linux 将原生 GL 视图放在对应位置。只传递矩形，不传像素。分隔条比例通过 `library_split` 保存，窄高窗口的剩余空间用于列表，画面不会被拉成长黑框。
+页面保持上下布局。DOM 计算 3:2 游戏区、库列表高度与裁剪矩形，宿主将矩形转换为实际像素。Windows 用窗口区域留出 D3D 视图，macOS/Linux 将原生 GL 视图放在对应位置。只传递矩形，不传像素。分隔条比例通过 `library_split` 保存，展开状态通过 `library_expanded` 保存；未手动选择展开状态时才按窗口空间自动决定。窄高窗口的剩余空间用于列表，画面不会被拉成长黑框。
 
 ## 本地界面和持久化
 

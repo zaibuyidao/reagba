@@ -16,7 +16,7 @@ int wmain(int argc, wchar_t **argv) {
             Json config = Json::object();
             NormalizeKeys(config);
             input.Configure(config);
-            const int vks[] = {'J','K',VK_SPACE,VK_RETURN,'D','A','W','S','E','Q','R'};
+            const int vks[] = {'J','K',VK_SPACE,VK_RETURN,'D','A','W','S','Q','O','L'};
             for (size_t i=0; i<11; ++i) require(VirtualKey(input.Mapping()[i]) == vks[i], "native key translation");
             for (int i=0; i<10; ++i) {
                 auto key=input.Mapping()[i];
@@ -31,12 +31,15 @@ int wmain(int argc, wchar_t **argv) {
             input.Key(SDL_SCANCODE_W,true); input.Key(SDL_SCANCODE_J,true);
             require(input.Poll(true)==65, "movement plus action chord");
             require(input.Poll(false)==0 && input.Poll(true)==0, "focus loss clears all keys");
-            input.Key(SDL_SCANCODE_R,true);
-            require(input.Poll(true)==0 && input.FastForward(), "R boosts without GBA shoulder input");
-            input.Key(SDL_SCANCODE_R,false); input.Poll(true);
+            input.Key(SDL_SCANCODE_L,true);
+            require(input.Poll(true)==0 && input.FastForward(), "L boosts without GBA shoulder input");
+            input.Key(SDL_SCANCODE_L,false); input.Poll(true);
             require(!input.FastForward(), "boost releases");
             config["keys"][0]="F"; input.Configure(config);
             input.Key(SDL_SCANCODE_F,true); require(input.Poll(true)==1, "custom mapping");
+            config["fast_forward_key"]="R";input.Configure(config);
+            input.Key(SDL_SCANCODE_R,true);require(input.Poll(true)==0 && input.FastForward(),"custom boost mapping");
+            input.Key(SDL_SCANCODE_R,false);input.Poll(true);require(!input.FastForward(),"custom boost releases");
             report["mapping_and_focus_passed"]=true;
             report["default_keys"]=DefaultKeys();
             if(argc>1) {

@@ -109,6 +109,8 @@ Json EmulatorManager::Handle(const Json &cmd) {
             throw std::runtime_error("settings must be an object");
         if (settings.contains("auto_download_covers") && !settings["auto_download_covers"].is_boolean())
             throw std::runtime_error("Automatic cover download must be a boolean");
+        if (settings.contains("library_expanded") && !settings["library_expanded"].is_boolean())
+            throw std::runtime_error("Library expanded must be a boolean");
         if (settings.contains("library_view") && (!settings["library_view"].is_string() ||
             !IsLibraryView(settings["library_view"].get<std::string>())))
             throw std::runtime_error("Unknown library view (expected details, grid or compact)");
@@ -130,7 +132,7 @@ Json EmulatorManager::Handle(const Json &cmd) {
         for (auto it = settings.begin(); it != settings.end(); ++it)
             if (it.key() == "keys" || it.key() == "integer_scaling" || it.key() == "filter" ||
                 it.key() == "bios" || it.key() == "vsync" || it.key() == "fast_forward_key" ||
-                it.key() == "library_split" || it.key() == "rom_directory" ||
+                it.key() == "library_split" || it.key() == "library_expanded" || it.key() == "rom_directory" ||
                 it.key() == "last_rom_directory" || it.key() == "shader" ||
                 it.key() == "auto_download_covers" || it.key() == "library_view")
                 preferences_[it.key()] = it.value();

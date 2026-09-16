@@ -2,6 +2,8 @@
 #include "app/EmulatorManager.h"
 #include "bridge/WebBridge.h"
 #include "save/SaveManager.h"
+#include "extension/WindowState.h"
+#include "input/KeyBindings.h"
 #include <iostream>
 #include <future>
 #include <set>
@@ -19,6 +21,15 @@ static std::string FrameHash(const Frame &frame) {
     return SHA256({data, data + sizeof(frame)});
 }
 static void SelfTest() {
+    WindowState window;
+    window.Restore({{"x",-1200},{"y",80},{"width",940},{"height",720},{"docked",true},{"dock_id",3},{"maximized",true}});
+    WindowState restored;
+    restored.Restore(Json::parse(window.ToJson().dump()));
+    Require(restored.ToJson()==window.ToJson(),"Window geometry and docker did not round-trip");
+    restored.Restore({{"x",1e30},{"width",-1},{"height","900"},{"dock_id",40},{"docked","true"}});
+    Require(restored.ToJson()==window.ToJson(),"Invalid window settings replaced valid geometry");
+    WindowState legacyWindow;legacyWindow.Restore({{"docked",true}});
+    Require(legacyWindow.docked && legacyWindow.width==760,"Old dock-only settings rejected");
     Require(SHA256({}) == "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
             "SHA-256 empty vector");
     Require(SHA256({'a', 'b', 'c'}) == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
@@ -66,6 +77,13 @@ static void SelfTest() {
         Require(settings.at("shader")=="none","Shader must default to off");
         Require(settings.at("auto_download_covers")==false,"Covers must default to offline");
         Require(settings.at("library_view")=="details","Default library view mismatch");
+        Require(settings.at("keys")==DefaultKeys() && settings.at("fast_forward_key")=="L","Default keyboard mismatch");
+        Require(std::abs(manager.volume.load()-.3f)<.0001f,"Volume must default to 30 percent");
+        Require(!Call(manager,{{"action","set_settings"},{"settings",{{"library_expanded","false"}}}}).value("ok",true),"Invalid library expansion accepted");
+        Require(Call(manager,{{"action","set_settings"},{"settings",{{"library_expanded",false}}}}).at("result").at("library_expanded")==false,"Library expansion rejected");
+        auto customKeys=DefaultKeys();customKeys[0]="F";customKeys[8]="E";
+        Require(Call(manager,{{"action","set_settings"},{"settings",{{"keys",customKeys},{"fast_forward_key","R"}}}}).value("ok",false),"Custom keys rejected");
+        Require(Call(manager,{{"action","set_volume"},{"value",.45}}).value("ok",false),"Custom volume rejected");
         for (const auto *view : {"grid", "details", "compact"})
             Require(Call(manager,{{"action","set_settings"},{"settings",{{"library_view",view}}}}).at("result").at("library_view")==view,"Library view rejected");
         for (const Json &view : {Json("invalid"),Json(1),Json(nullptr)})
@@ -89,7 +107,15 @@ static void SelfTest() {
         Require(fs::u8path(settings.at("last_rom_directory").get<std::string>())==customROM,"Last opened ROM folder did not survive restart");
         Require(settings.at("shader")=="lcd-grid-v2","Shader did not survive restart");
         Require(settings.at("library_view")=="compact","Library view did not survive restart");
+        Require(settings.at("library_expanded")==false,"Collapsed library did not survive restart");
+        Require(settings.at("keys")[0]=="F" && settings.at("keys")[8]=="E" && settings.at("fast_forward_key")=="R","Custom keys did not survive restart");
+        Require(std::abs(manager.volume.load()-.45f)<.0001f,"Custom volume did not survive restart");
+        Require(Call(manager,{{"action","set_settings"},{"settings",{{"library_expanded",true}}}}).value("ok",false),"Expanded library rejected");
         Require(settings.at("auto_download_covers")==true,"Cover setting did not survive restart");
+    }
+    {
+        EmulatorManager manager(defaultROM,settingsRoot/"ReaGBA");
+        Require(Call(manager,{{"action","get_settings"}}).at("result").at("library_expanded")==true,"Expanded library did not survive restart");
     }
     fs::remove_all(settingsRoot);
     std::cout << "PASS: SHA-256, bounded audio ring, concurrent triple buffer, persisted ROM folders and shaders\n";

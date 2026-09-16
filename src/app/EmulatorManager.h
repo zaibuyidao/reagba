@@ -25,7 +25,7 @@ class EmulatorManager {
     void SetFastForward(bool held) { fastForward_.store(held); }
     FrameBuffer frames;
     AudioBuffer audio;
-    std::atomic<float> volume{0.7f};
+    std::atomic<float> volume{0.3f};
     std::atomic<bool> audible{false};
 
   private:

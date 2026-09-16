@@ -20,6 +20,8 @@ const output = path.resolve(__dirname, '../verification/settings');
         page.on('console', msg => { if (msg.type() === 'error') errors.push(msg.text()); });
         await page.addInitScript(() => {
             let prefs = JSON.parse(localStorage.getItem('settings-test') || '{}');
+            const game = {hash:'settings',code:'TEST',title:'Settings test',path:'test.gba',size:1024,play_seconds:0};
+            const state = {loaded:false,running:false,fps:59.7,speed:1,base_speed:1,volume:.3,frame_skip:0,core:'mGBA',app_version:'test'};
             window.settingsRequests = [];
             window.nativeRequest = async cmd => {
                 window.settingsRequests.push(cmd);
@@ -30,15 +32,19 @@ const output = path.resolve(__dirname, '../verification/settings');
                     localStorage.setItem('settings-test', JSON.stringify(prefs));
                     result = prefs;
                 }
-                if (cmd.action === 'get_emulator_state') result = {loaded:false,running:false,
-                    speed:1,base_speed:1,volume:.7,frame_skip:0,core:'mGBA',app_version:'test'};
-                if (cmd.action === 'scan_roms' || cmd.action === 'get_save_states') result = [];
+                if (cmd.action === 'get_emulator_state') result = state;
+                if (cmd.action === 'load_rom' || cmd.action === 'open_rom') result = {...state,loaded:true,running:true,game};
+                if (cmd.action === 'scan_roms') result = [game];
+                if (cmd.action === 'get_save_states') result = [];
                 return {ok:true,result};
             };
         });
         await page.goto(entry);
         await page.waitForFunction(() => document.getElementById('about-version').textContent === 'test');
         await page.click('#settings-toggle');
+        assert.equal(await page.locator('#volume').inputValue(), '30');
+        const defaults = ['J','K','Space','Return','D','A','W','S','Q','O','L'];
+        assert.deepEqual(await page.locator('#keys button').allTextContents(),defaults);
         const sizes = [[240,500],[298,1299],[320,500],[400,600],[440,900],[760,1200],
             [1280,540],[1600,900],[1920,400],[1920,2000]];
         const results = [];
@@ -73,6 +79,26 @@ const output = path.resolve(__dirname, '../verification/settings');
         await page.click('#settings-toggle');
         assert.equal(await page.locator('#shader').inputValue(), 'lcd-grid-v2', 'preset restored on reopen');
         assert.equal(await page.locator('#filter').isDisabled(), true);
+        const custom = ['F','G','Left Shift','Return','Right','Left','Up','Down','U','I','P'];
+        const presses = ['f','g','ShiftLeft','Enter','ArrowRight','ArrowLeft','ArrowUp','ArrowDown','u','i','p'];
+        for (let i=0;i<custom.length;i++) {
+            await page.locator('#keys button').nth(i).click();await page.keyboard.press(presses[i]);
+            await page.waitForFunction(({i,key})=>document.querySelectorAll('#keys button')[i].textContent===key,{i,key:custom[i]});
+        }
+        await page.click('#settings-toggle');
+        await page.click('#toggle');
+        const customHint = 'Up / Down / Left / Right = ↑ / ↓ / ← / → · F / G = A / B · U / I = R / L · Return = Start · Left Shift = Select · 按住 P 加速';
+        await page.waitForFunction(hint=>document.getElementById('toast').textContent===hint,customHint);
+        await page.reload();await page.waitForFunction(()=>document.getElementById('about-version').textContent==='test');
+        await page.click('#open');
+        await page.waitForFunction(hint=>document.getElementById('toast').textContent===hint,customHint);
+        await page.click('#settings-toggle');
+        assert.deepEqual(await page.locator('#keys button').allTextContents(),custom,'custom keys survive reopen');
+        await page.click('#reset-keys');
+        await page.waitForFunction(()=>document.querySelectorAll('#keys button')[10].textContent==='L');
+        assert.deepEqual(await page.locator('#keys button').allTextContents(),defaults);
+        await page.click('#settings-toggle');await page.click('#open');
+        await page.waitForFunction(()=>document.getElementById('toast').textContent.includes('Q / O = R / L')&&document.getElementById('toast').textContent.endsWith('按住 L 加速'));
         assert.deepEqual(errors, [], 'UI loads directly as three source files, without JS/CSP errors');
         fs.writeFileSync(path.join(output,'report.json'),JSON.stringify({passed:true,sizes:results},null,2));
         console.log('PASS: settings at 10 sizes, shader selection/persistence, no horizontal overflow or script errors');

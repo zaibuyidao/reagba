@@ -2,6 +2,7 @@
 #include "reaper/ReaperAPI.h"
 #include "extension/Host.h"
 #include "extension/RuntimePaths.h"
+#include "extension/WindowState.h"
 #include "audio/AudioEngine.h"
 #include "bridge/WebBridge.h"
 #include <deque>
@@ -18,7 +19,6 @@ gaccel_register_t accelerator{};
 int showCommand = 0;
 bool closing = false, inTimer = false;
 std::string pendingError;
-RECT floatingRect{100,100,860,1000};
 struct Inbox {
     std::mutex mutex;
     bool alive = true;
@@ -39,6 +39,9 @@ struct Session {
     Json lastStatus, lastLayout, testLog = Json::array(), testStates = Json::array();
     std::string lastTestRequest;
     std::chrono::steady_clock::time_point lastState{};
+    WindowState windowState;
+    Json savedWindowState, observedWindowState;
+    std::chrono::steady_clock::time_point windowChanged{};
     ~Session() {
         { std::lock_guard<std::mutex> lock(inbox->mutex); inbox->alive=false; }
         host.reset();
@@ -49,8 +52,47 @@ struct Session {
 };
 std::unique_ptr<Session> session;
 bool IsDocked();
-void PersistDocked() noexcept {
-    try {if(session && session->host)WriteJSON(session->data/"config"/"window.json",{{"docked",IsDocked()}});}catch(...){}
+void CaptureFloatingWindow() {
+    const auto window=static_cast<HWND>(session->host->Window());
+    auto& state=session->windowState;
+    RECT rect{};
+    if(!GetWindowRect(window,&rect))return;
+#ifdef _WIN32
+    WINDOWPLACEMENT placement{sizeof(WINDOWPLACEMENT)};
+    if(GetWindowPlacement(window,&placement)) {
+        state.maximized=IsZoomed(window) || (IsIconic(window) && (placement.flags&WPF_RESTORETOMAXIMIZED));
+        if(IsIconic(window)||IsZoomed(window)) {
+            rect=placement.rcNormalPosition;
+            // WINDOWPLACEMENT uses workspace coordinates for top-level windows.
+            MONITORINFO monitor{sizeof(MONITORINFO)};
+            if(GetMonitorInfo(MonitorFromWindow(window,MONITOR_DEFAULTTONEAREST),&monitor))
+                OffsetRect(&rect,monitor.rcWork.left-monitor.rcMonitor.left,monitor.rcWork.top-monitor.rcMonitor.top);
+        }
+    }
+#endif
+    if(rect.right<=rect.left || rect.bottom<=rect.top)return;
+    state.x=rect.left;state.y=rect.top;state.width=rect.right-rect.left;state.height=rect.bottom-rect.top;
+}
+void PersistWindowState(bool immediate=false, bool capture=true) noexcept {
+    try {
+        if(!session || !session->host)return;
+        auto& s=*session;
+        const auto window=static_cast<HWND>(s.host->Window());
+        if(capture && window && IsWindow(window)) {
+            bool floating=false;
+            const int dock=DockIsChildOfDock(window,&floating);
+            s.windowState.docked=dock>=0;
+            if(dock>=0)s.windowState.dockId=dock;else CaptureFloatingWindow();
+        }
+        const auto current=s.windowState.ToJson();
+        const auto now=std::chrono::steady_clock::now();
+        if(current!=s.observedWindowState) {s.observedWindowState=current;s.windowChanged=now;}
+        if(current!=s.savedWindowState && (immediate || now-s.windowChanged>=std::chrono::milliseconds(500))) {
+            WriteJSON(s.data/"config"/"window.json",current);
+            if(s.windowState.docked && s.windowState.dockId>=0)Dock_UpdateDockID("ReaGBANativeDock",s.windowState.dockId);
+            s.savedWindowState=current;
+        }
+    }catch(...){}
 }
 bool IsDocked() {
     bool floating=false;
@@ -58,27 +100,45 @@ bool IsDocked() {
 }
 void ShowFloating() {
     const auto window=static_cast<HWND>(session->host->Window());
+    auto& state=session->windowState;
     SetParent(window,nullptr);
 #ifdef _WIN32
     SetWindowLongPtr(window,GWL_STYLE,WS_OVERLAPPEDWINDOW|WS_CLIPCHILDREN);
     SetWindowLongPtr(window,GWLP_HWNDPARENT,reinterpret_cast<LONG_PTR>(plugin->hwnd_main));
-    SetWindowPos(window,nullptr,floatingRect.left,floatingRect.top,floatingRect.right-floatingRect.left,
-        floatingRect.bottom-floatingRect.top,SWP_NOZORDER|SWP_NOACTIVATE|SWP_FRAMECHANGED);
+    RECT rect{state.x,state.y,state.x+state.width,state.y+state.height};
+    if(!MonitorFromRect(&rect,MONITOR_DEFAULTTONULL)) {
+        MONITORINFO monitor{sizeof(MONITORINFO)};
+        if(GetMonitorInfo(MonitorFromRect(&rect,MONITOR_DEFAULTTONEAREST),&monitor)) {
+            state.x=monitor.rcWork.left;state.y=monitor.rcWork.top;
+        }
+    }
 #endif
-    ShowWindow(window,SW_SHOW);SetForegroundWindow(window);
+    SetWindowPos(window,nullptr,state.x,state.y,state.width,state.height,SWP_NOZORDER|SWP_NOACTIVATE|SWP_FRAMECHANGED);
+#ifdef _WIN32
+    ShowWindow(window,state.maximized?SW_SHOWMAXIMIZED:SW_SHOWNORMAL);
+#else
+    ShowWindow(window,SW_SHOW);
+#endif
+    SetForegroundWindow(window);
 }
 void SetDocked(bool dock) {
     const auto window=static_cast<HWND>(session->host->Window());
     if(dock!=IsDocked()) {
-        if(dock) {GetWindowRect(window,&floatingRect);DockWindowAddEx(window,"ReaGBA","ReaGBANativeDock",true);DockWindowActivate(window);}
-        else {bool floating=false;const int index=DockIsChildOfDock(window,&floating);if(index>=0)Dock_UpdateDockID("ReaGBANativeDock",index);DockWindowRemove(window);ShowFloating();}
+        if(dock) {
+            CaptureFloatingWindow();
+            if(session->windowState.dockId>=0)Dock_UpdateDockID("ReaGBANativeDock",session->windowState.dockId);
+            DockWindowAddEx(window,"ReaGBA","ReaGBANativeDock",true);DockWindowActivate(window);
+        }
+        else {bool floating=false;const int index=DockIsChildOfDock(window,&floating);if(index>=0){session->windowState.dockId=index;Dock_UpdateDockID("ReaGBANativeDock",index);}DockWindowRemove(window);ShowFloating();}
     }
-    PersistDocked();
+    PersistWindowState(true);
 }
-void Close() {
+void Close(bool hostShutdown=false) {
     closing=false;
     if(session && session->host) {
-        PersistDocked();
+        // REAPER may already have destroyed the Docker and its child windows
+        // before unloading the extension. Keep the last live placement then.
+        PersistWindowState(true,!hostShutdown);
         if(IsDocked())DockWindowRemove(static_cast<HWND>(session->host->Window()));
     }
     session.reset();
@@ -99,9 +159,8 @@ void Open() {
     if(const auto* test=std::getenv("REAGBA_EXTENSION_TEST_DIR");test && *test) {
         next->testDirectory=fs::u8path(test);next->data=next->testDirectory/"data";
     }
-    bool initiallyDocked=false;
     const auto windowSettings=next->data/"config"/"window.json";
-    if(fs::is_regular_file(windowSettings))try {initiallyDocked=Json::parse(ReadBytes(windowSettings,65536)).value("docked",false);}catch(...){}
+    if(fs::is_regular_file(windowSettings))try {next->windowState.Restore(Json::parse(ReadBytes(windowSettings,65536)));}catch(...){}
     const auto preferencesPath=next->data/"config"/"preferences.json";
     if(fs::is_regular_file(preferencesPath))try {
         const auto preferences=Json::parse(ReadBytes(preferencesPath,1024*1024));
@@ -129,6 +188,7 @@ void Open() {
         current->requests.push_back(std::move(request));return true;
     };
     config.close=[current] {
+        PersistWindowState(true);
         if(!current->testDirectory.empty())WriteJSON(current->testDirectory/"host-closed.json",{{"reason","window close requested"}});
         closing=true;
     };
@@ -138,8 +198,9 @@ void Open() {
     };
     next->host=CreateWebViewHost(std::move(config));
     session=std::move(next);
-    GetWindowRect(static_cast<HWND>(session->host->Window()),&floatingRect);
-    if(initiallyDocked)SetDocked(true);else {ShowFloating();PersistDocked();}
+    const bool initiallyDocked=session->windowState.docked;
+    ShowFloating();
+    if(initiallyDocked)SetDocked(true);else PersistWindowState(true);
 }
 Json Viewport(const Json& command) {
     const auto& v=command.at("rect");
@@ -200,6 +261,7 @@ void Timer() {
             for(int count=0;count<32 && !s.requests.empty();++count) {auto request=std::move(s.requests.front());s.requests.pop_front();Request(std::move(request));}
             const auto now=std::chrono::steady_clock::now();
             if(!s.statusPending && now-s.lastState>std::chrono::milliseconds(250)) {
+                PersistWindowState();
                 s.lastState=now;s.statusPending=true;auto inbox=s.inbox;
                 s.manager->Submit({{"action","get_emulator_state"}},[inbox](Json result){result["type"]="state";inbox->Put(std::move(result));});
             }
@@ -255,7 +317,7 @@ int WindowInfo(HWND window,INT_PTR type) {
 extern "C" REAPER_PLUGIN_DLL_EXPORT int REAPER_PLUGIN_ENTRYPOINT(REAPER_PLUGIN_HINSTANCE,reaper_plugin_info_t* rec) {
     if(!rec) {
         if(plugin) {plugin->Register("-timer",reinterpret_cast<void*>(Timer));plugin->Register("-hookcommand",reinterpret_cast<void*>(OnCommand));plugin->Register("-hwnd_info",reinterpret_cast<void*>(WindowInfo));plugin->Register("-gaccel",&accelerator);}
-        try{Close();}catch(...){}plugin=nullptr;getUserFileName=nullptr;return 0;
+        try{Close(true);}catch(...){}plugin=nullptr;getUserFileName=nullptr;return 0;
     }
     if(rec->caller_version!=REAPER_PLUGIN_VERSION || !rec->GetFunc || REAPERAPI_LoadAPI(rec->GetFunc))return 0;
     plugin=rec;getUserFileName=reinterpret_cast<GetUserFileNameAPI>(rec->GetFunc("GetUserFileName"));showCommand=rec->Register("command_id",const_cast<char*>("REAGBA_SHOW"));if(!showCommand)return 0;

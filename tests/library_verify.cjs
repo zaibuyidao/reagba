@@ -73,6 +73,12 @@ const image=fs.existsSync(cached)?'data:image/png;base64,'+fs.readFileSync(cache
   }
   await page.reload();await page.waitForFunction(()=>document.getElementById('about-version').textContent==='test');
   assert.equal(await page.locator('#library-display').inputValue(),'compact','view survives reopen');
+  for(const mode of ['grid','details','compact']){
+   await page.selectOption('#library-display',mode);
+   await page.waitForFunction(mode=>JSON.parse(localStorage.getItem('library-test')).library_view===mode,mode);
+   await page.reload();await page.waitForFunction(()=>document.getElementById('about-version').textContent==='test');
+   assert.equal(await page.locator('#library-display').inputValue(),mode,'each view survives reopening');
+  }
   await page.click('#settings-toggle');await page.check('#auto-covers');
   await page.waitForFunction(()=>!coversLoading&&coverCache.get('ABCE')?.status==='ready');
   assert.equal(await page.locator('#auto-covers').isChecked(),true);

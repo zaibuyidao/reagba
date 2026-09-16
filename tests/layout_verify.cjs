@@ -69,9 +69,15 @@ const entry = 'file:///'+path.join(root,'ui/index.html').replaceAll('\\','/');
         await page.click('#library-toggle');
         await settle();
         assert.equal(await page.locator('#library-body').isVisible(),false,'library can be collapsed');
+        await page.waitForFunction(()=>preferences.library_expanded===false);
+        await page.reload();await page.waitForFunction(()=>document.body.classList.contains('playing'));await settle();
+        assert.equal(await page.locator('#library-body').isVisible(),false,'collapsed library survives reopening');
         await page.click('#library-toggle');
         await settle();
         assert.equal(await page.locator('#library-body').isVisible(),true,'library can be reopened');
+        await page.waitForFunction(()=>preferences.library_expanded===true);
+        await page.reload();await page.waitForFunction(()=>document.body.classList.contains('playing'));await settle();
+        assert.equal(await page.locator('#library-body').isVisible(),true,'expanded library survives reopening');
         // Mouse capture must keep resizing when the pointer leaves the divider.
         await page.setViewportSize({width:298,height:1299});
         await settle();

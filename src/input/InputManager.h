@@ -8,7 +8,7 @@ class InputManager {
     SDL_GameController *pad_ = nullptr;
     std::array<SDL_Scancode, 11> mapping_ = {
         SDL_SCANCODE_J, SDL_SCANCODE_K, SDL_SCANCODE_SPACE, SDL_SCANCODE_RETURN, SDL_SCANCODE_D,
-        SDL_SCANCODE_A, SDL_SCANCODE_W, SDL_SCANCODE_S, SDL_SCANCODE_E, SDL_SCANCODE_Q, SDL_SCANCODE_R};
+        SDL_SCANCODE_A, SDL_SCANCODE_W, SDL_SCANCODE_S, SDL_SCANCODE_Q, SDL_SCANCODE_O, SDL_SCANCODE_L};
     std::array<bool, SDL_NUM_SCANCODES> held_{};
     std::array<bool, SDL_NUM_SCANCODES> pressed_{};
     bool fastForward_ = false;

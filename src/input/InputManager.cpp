@@ -14,7 +14,7 @@ void InputManager::Configure(const Json &config) {
                     mapping_[i] = key;
             }
     }
-    auto boost = SDL_GetScancodeFromName(config.value("fast_forward_key", std::string("R")).c_str());
+    auto boost = SDL_GetScancodeFromName(config.value("fast_forward_key", std::string("L")).c_str());
     if (boost != SDL_SCANCODE_UNKNOWN)
         mapping_[10] = boost;
 }
