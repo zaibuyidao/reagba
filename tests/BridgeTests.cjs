@@ -20,7 +20,7 @@ function fixture(platform){
   f.window.ReaGBAReceive({type:'reply',id:f.sent[0].id,ok:false,error:'Invalid ROM'});
   assert.equal((await first).error,'Invalid ROM');assert.equal(f.timers.size,0);
   f.window.ReaGBAReceive({type:'reply',id:999,ok:true});
-  const timed=f.window.nativeRequest({action:'start'});const rejected=assert.rejects(timed,/响应超时/);
+  const timed=f.window.nativeRequest({action:'start'});const rejected=assert.rejects(timed,/did not respond/);
   [...f.timers.values()][0]();await rejected;
   f.transport.postMessage=()=>{throw Error('bridge unavailable');};
   await assert.rejects(f.window.nativeRequest({action:'pause'}),/bridge unavailable/);

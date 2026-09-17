@@ -27,6 +27,8 @@ Linux 的 `extension/reagba-webview-*` 是界面与原生 OpenGL 渲染辅助进
 
 ## 操作与布局
 
+设置顶部可选择英语、简体中文、正體中文、日语、韩语、西班牙语、德语或法语。首次启动固定为英文，切换立即生效并保存到配置文件，重新打开和重启 REAPER 后保留。语言资源集中在 `ui/i18n.js`，新增语言会自动出现在列表中；维护方法见 [多语言界面维护](docs/LOCALIZATION.md)。本次首次启用多语言需同时更新原生扩展与四个 web 文件，后续新增语言无需修改扩展。
+
 默认键盘：**W/S/A/D = 上/下/左/右，J/K = A/B，Q/O = R/L，回车 = Start，空格 = Select**。**按住 L 临时 4× 加速，松开恢复原倍率**。点击游戏画面获得输入焦点；编辑搜索或键位设置时会阻止游戏输入，离开 ReaGBA 后释放按键。设置中可修改或恢复默认键位，也支持 SDL GameController 兼容手柄。启动游戏时的提示使用当前键位。默认音量为 **30%**，已保存的键位和音量继续保留。
 
 右上角“停靠 / 取消停靠”切换 REAPER Docker 与浮动窗口，切换时保留正在运行的核心。界面只采用上下布局：游戏库在上，游戏画面在开始/暂停按钮上方。画面区域保持 GBA 的 3:2 比例；额外高度用于游戏库。拖动中间分隔条可改变占比，双击恢复自动分配。整数缩放可能产生少量黑边，可在设置中关闭。
@@ -83,7 +85,7 @@ python scripts/extension_smoke.py --reaper C:/REAPER/reaper.exe --rom ./ROM/game
 
 扩展测试使用独立的 `build/extension-smoke` REAPER 配置和 `verification` 存档，不操作日常工程。无 ROM 的 CTest 覆盖核心边界、Windows 键位、WebView 通信、发布包边界和 Linux 共享帧恢复。可选的布局测试需要 Playwright：`npm install --no-save playwright`、`npx playwright install chromium` 后运行 `node tests/layout_verify.cjs`。
 
-设置页回归测试：`node tests/settings_verify.cjs`，检查不同宽高下无横向溢出、shader 保存/恢复、三份 UI 文件直接加载。Windows 的 `native_shaders` CTest 用 WARP 离屏渲染两个预设，与独立 CPU 数学参考逐像素抽样比对；运行 `reagba_shader_verify verification/shaders` 后还可执行 `node tests/shaders_gl_verify.cjs`，将同一 GLSL 程序转为 GLSL ES 3.0，在 WebGL2 中与 D3D 输出比对（不代替 macOS/Linux 实机 OpenGL 验收）。
+设置页回归测试：`node tests/settings_verify.cjs`，检查不同宽高下无横向溢出、shader 保存/恢复、四份 UI 文件直接加载。Windows 的 `native_shaders` CTest 用 WARP 离屏渲染两个预设，与独立 CPU 数学参考逐像素抽样比对；运行 `reagba_shader_verify verification/shaders` 后还可执行 `node tests/shaders_gl_verify.cjs`，将同一 GLSL 程序转为 GLSL ES 3.0，在 WebGL2 中与 D3D 输出比对（不代替 macOS/Linux 实机 OpenGL 验收）。
 
 游戏库回归测试：`node tests/library_verify.cjs`，覆盖三种视图、五种宽度、完整封面与字母回退、显示方式持久化、收藏/搜索/排序与键盘启动。`library_covers` CTest 使用替代下载器验证离线缓存、编号匹配、开关取消、损坏文件及重试限制，无需联网；`reagba_covers_verify --online BZME` 可选验证真实 HTTPS 封面下载。
 
@@ -91,7 +93,7 @@ Windows 本地已验证 REAPER 7.78 中注册操作、塞尔达 ROM 运行、音
 
 ## 自动构建
 
-私有源码仓库 `reagba` 独立构建。`ui/index.html`、`ui/style.css`、`ui/app.js` 本身就是可运行的发布文件，构建只把这三份文件原样复制到 `web`，不再内联合并。GitHub Actions 为五个平台编译、测试，生成安装 ZIP、原生扩展文件和 **ReaGBA-ReaPack-vX.Y.Z.zip**。ReaPack 发布包固定包含 7 个 `extension` 文件、3 个 `web` 文件和 `ReaGBA.ext`。
+私有源码仓库 `reagba` 独立构建。`ui/index.html`、`ui/style.css`、`ui/i18n.js`、`ui/app.js` 本身就是可运行的发布文件，构建只把这四份文件原样复制到 `web`，不再内联合并。GitHub Actions 为五个平台编译、测试，生成安装 ZIP、原生扩展文件和 **ReaGBA-ReaPack-vX.Y.Z.zip**。ReaPack 发布包固定包含 7 个 `extension` 文件、4 个 `web` 文件和 `ReaGBA.ext`。
 
 维护者自行从私有 Release 下载，将发布包中的 ReaGBA 目录整理进公开的 `ReaScripts/ReaGBA`，再提交并更新 ReaPack 索引。`.ext` 的所有下载地址只指向公开的 ReaScripts 仓库；运行时不需要私有源码仓库、构建工具或 GitHub 认证。工作流不会修改 ReaScripts，也不会自动跨仓库发布。
 

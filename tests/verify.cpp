@@ -77,6 +77,12 @@ static void SelfTest() {
         Require(settings.at("shader")=="none","Shader must default to off");
         Require(settings.at("auto_download_covers")==false,"Covers must default to offline");
         Require(settings.at("library_view")=="details","Default library view mismatch");
+        Require(settings.at("language")=="en","First launch must use English");
+        // Include a future catalog to ensure native code does not whitelist languages.
+        for (const auto *language : {"en", "zh-CN", "zh-TW", "ja", "ko", "es", "de", "fr", "pt-BR"})
+            Require(Call(manager,{{"action","set_settings"},{"settings",{{"language",language}}}}).at("result").at("language")==language,"Language setting rejected");
+        for (const Json &language : {Json(""),Json(1),Json(nullptr),Json("../en"),Json(std::string(65,'a'))})
+            Require(!Call(manager,{{"action","set_settings"},{"settings",{{"language",language}}}}).value("ok",true),"Invalid language accepted");
         Require(settings.at("keys")==DefaultKeys() && settings.at("fast_forward_key")=="L","Default keyboard mismatch");
         Require(std::abs(manager.volume.load()-.3f)<.0001f,"Volume must default to 30 percent");
         Require(!Call(manager,{{"action","set_settings"},{"settings",{{"library_expanded","false"}}}}).value("ok",true),"Invalid library expansion accepted");
@@ -107,6 +113,7 @@ static void SelfTest() {
         Require(fs::u8path(settings.at("last_rom_directory").get<std::string>())==customROM,"Last opened ROM folder did not survive restart");
         Require(settings.at("shader")=="lcd-grid-v2","Shader did not survive restart");
         Require(settings.at("library_view")=="compact","Library view did not survive restart");
+        Require(settings.at("language")=="pt-BR","Language did not survive restart");
         Require(settings.at("library_expanded")==false,"Collapsed library did not survive restart");
         Require(settings.at("keys")[0]=="F" && settings.at("keys")[8]=="E" && settings.at("fast_forward_key")=="R","Custom keys did not survive restart");
         Require(std::abs(manager.volume.load()-.45f)<.0001f,"Custom volume did not survive restart");

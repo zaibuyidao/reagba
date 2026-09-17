@@ -68,7 +68,7 @@ const output = path.resolve(__dirname, '../verification/settings');
                 await page.screenshot({path:path.join(output, `settings-${width}.png`)});
             }
         }
-        assert.equal(await page.locator('#reset-keys + h3').textContent(), 'BIOS（可选）');
+        assert.equal(await page.locator('#reset-keys + h3').textContent(), 'BIOS (optional)');
         for (const shader of ['lcd3x','lcd-grid-v2','none','lcd-grid-v2']) {
             await page.selectOption('#shader', shader);
             await page.waitForFunction(value => JSON.parse(localStorage.getItem('settings-test')).shader === value, shader);
@@ -87,7 +87,7 @@ const output = path.resolve(__dirname, '../verification/settings');
         }
         await page.click('#settings-toggle');
         await page.click('#toggle');
-        const customHint = 'Up / Down / Left / Right = ↑ / ↓ / ← / → · F / G = A / B · U / I = R / L · Return = Start · Left Shift = Select · 按住 P 加速';
+        const customHint = 'Up / Down / Left / Right = ↑ / ↓ / ← / → · F / G = A / B · U / I = R / L · Return = Start · Left Shift = Select · Hold P to fast-forward';
         await page.waitForFunction(hint=>document.getElementById('toast').textContent===hint,customHint);
         await page.reload();await page.waitForFunction(()=>document.getElementById('about-version').textContent==='test');
         await page.click('#open');
@@ -98,8 +98,8 @@ const output = path.resolve(__dirname, '../verification/settings');
         await page.waitForFunction(()=>document.querySelectorAll('#keys button')[10].textContent==='L');
         assert.deepEqual(await page.locator('#keys button').allTextContents(),defaults);
         await page.click('#settings-toggle');await page.click('#open');
-        await page.waitForFunction(()=>document.getElementById('toast').textContent.includes('Q / O = R / L')&&document.getElementById('toast').textContent.endsWith('按住 L 加速'));
-        assert.deepEqual(errors, [], 'UI loads directly as three source files, without JS/CSP errors');
+        await page.waitForFunction(()=>document.getElementById('toast').textContent.includes('Q / O = R / L')&&document.getElementById('toast').textContent.endsWith('Hold L to fast-forward'));
+        assert.deepEqual(errors, [], 'UI loads directly as four source files, without JS/CSP errors');
         fs.writeFileSync(path.join(output,'report.json'),JSON.stringify({passed:true,sizes:results},null,2));
         console.log('PASS: settings at 10 sizes, shader selection/persistence, no horizontal overflow or script errors');
     } finally { await browser.close(); }

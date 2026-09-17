@@ -153,7 +153,7 @@ void Open() {
     const auto paths=ResolveRuntimePaths(fs::u8path(GetResourcePath()));
     next->root=paths.product;
     const auto ui=paths.web;
-    for(const auto* name:{"index.html","style.css","app.js"})
+    for(const auto* name:{"index.html","style.css","i18n.js","app.js"})
         if(!fs::is_regular_file(ui/name))throw std::runtime_error("Missing Scripts/zaibuyidao Scripts/ReaGBA/web UI files. Install the complete ReaGBA package with ReaPack.");
     next->data=paths.data;
     if(const auto* test=std::getenv("REAGBA_EXTENSION_TEST_DIR");test && *test) {
@@ -223,20 +223,22 @@ void Request(Json command) {
         else {
             if(action=="open_rom") {
                 char path[8192]{};
+                const auto title=command.value("dialog_title",std::string("ReaGBA: Open GBA ROM"));
                 bool selected=false;
                 if(getUserFileName) {
                     auto initial=session->lastRomDirectory.u8string();
                     if(initial.empty() && command.value("initial_path",Json()).is_string())initial=command["initial_path"].get<std::string>();
-                    selected=getUserFileName(1,"ReaGBA: Open GBA ROM",initial.c_str(),"GBA ROM|*.gba",path,sizeof(path));
-                } else selected=GetUserFileNameForRead(path,"ReaGBA: Open GBA ROM","gba");
+                    selected=getUserFileName(1,title.c_str(),initial.c_str(),"GBA ROM|*.gba",path,sizeof(path));
+                } else selected=GetUserFileNameForRead(path,title.c_str(),"gba");
                 if(!selected) {reply["result"]=nullptr;session->host->Post(reply.dump());return;}
                 session->lastRomDirectory=fs::u8path(path).parent_path();
                 command={{"action","load_rom"},{"path",path},{"id",id}};
             } else if(action=="select_rom_directory") {
                 if(!getUserFileName)throw std::runtime_error("This REAPER version does not provide a folder chooser");
                 char path[8192]{};
+                const auto title=command.value("dialog_title",std::string("ReaGBA: Select ROM Folder"));
                 auto initial=command.value("initial_path",Json()).is_string()?command["initial_path"].get<std::string>():std::string();
-                if(!getUserFileName(3,"ReaGBA: Select ROM Folder",initial.c_str(),"",path,sizeof(path))) {reply["result"]=nullptr;session->host->Post(reply.dump());return;}
+                if(!getUserFileName(3,title.c_str(),initial.c_str(),"",path,sizeof(path))) {reply["result"]=nullptr;session->host->Post(reply.dump());return;}
                 session->lastRomDirectory=fs::u8path(path);
                 command={{"action","set_settings"},{"settings",{{"rom_directory",path},{"last_rom_directory",path}}},{"id",id}};
             }

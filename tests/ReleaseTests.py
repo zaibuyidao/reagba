@@ -42,8 +42,8 @@ class Packages(unittest.TestCase):
                 expected={'ReaGBA/ReaGBA.ext'}|{'ReaGBA/web/'+name for name in reapack.web_files()}
                 expected|={'ReaGBA/extension/'+name for pair in release.PLATFORMS.values() for name in pair if name}
                 self.assertEqual(set(archive.namelist()),expected)
-                self.assertEqual(len(expected),11)
-                self.assertEqual(reapack.web_files(),['app.js','index.html','style.css'])
+                self.assertEqual(len(expected),12)
+                self.assertEqual(reapack.web_files(),['app.js','i18n.js','index.html','style.css'])
                 self.assertEqual(archive.read('ReaGBA/ReaGBA.ext').decode(),reapack.manifest())
                 for name in expected:
                     if release.executable(name):self.assertTrue((archive.getinfo(name).external_attr>>16)&0o100)
@@ -60,14 +60,14 @@ class Packages(unittest.TestCase):
             with self.assertRaises(ValueError):release.collect(root/'stage',root/'out','windows-x64')
             with self.assertRaises(ValueError):release.aggregate(root/'empty',root/'out','v'+release.version())
 
-    def test_installed_ui_matches_the_three_sources(self):
+    def test_installed_ui_matches_the_four_sources(self):
         with tempfile.TemporaryDirectory() as tmp:
             output=Path(tmp)/'web';prepare_ui.assemble(release.ROOT/'ui',output,release.version())
-            self.assertEqual({p.name for p in output.iterdir()},{'app.js','index.html','style.css'})
+            self.assertEqual({p.name for p in output.iterdir()},{'app.js','i18n.js','index.html','style.css'})
             for name in reapack.web_files():
                 self.assertEqual((output/name).read_bytes(),(release.ROOT/'ui'/name).read_bytes())
             html=(output/'index.html').read_text(encoding='utf-8')
-            self.assertIn('href="style.css"',html);self.assertIn('src="app.js"',html)
+            self.assertIn('href="style.css"',html);self.assertIn('src="app.js"',html);self.assertIn('src="i18n.js"',html)
 
     def test_common_web_assets_must_match(self):
         with tempfile.TemporaryDirectory() as tmp:

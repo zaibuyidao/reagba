@@ -46,6 +46,7 @@ def write_zip(target,files):
             archive.writestr(info,data)
 
 def collect(stage,output,platform):
+    import reapack
     files={}
     for relative in package_files(platform):
         path=stage/relative
@@ -54,10 +55,10 @@ def collect(stage,output,platform):
         # Common assets must be identical across Windows and Unix packages.
         if path.suffix in ('.html','.css','.js'):data=data.replace(b'\r\n',b'\n')
         files[relative.as_posix()]=data
-    ui={name:files[(PRODUCT/'web'/name).as_posix()].decode('utf-8') for name in ('index.html','style.css','app.js')}
+    ui={name:files[(PRODUCT/'web'/name).as_posix()].decode('utf-8') for name in reapack.web_files()}
     if any(marker in text for text in ui.values() for marker in ('/* REAGBA_STYLE */','/* REAGBA_SCRIPT */','@REAGBA_VERSION@')):raise ValueError('UI must be directly runnable before packaging')
     html=ui['index.html']
-    if 'href="style.css"' not in html or 'src="app.js"' not in html:raise ValueError('UI entry must load style.css and app.js')
+    if 'href="style.css"' not in html or 'src="app.js"' not in html or 'src="i18n.js"' not in html:raise ValueError('UI entry must load style.css, i18n.js and app.js')
     metadata={'version':version(),'platform':platform,'action':'_REAGBA_SHOW','action_name':'zaibuyidao: ReaGBA',
               'files':{name:hashlib.sha256(data).hexdigest() for name,data in files.items()}}
     files[(PRODUCT/'web/manifest.json').as_posix()]=json.dumps(metadata,indent=2).encode('utf-8')

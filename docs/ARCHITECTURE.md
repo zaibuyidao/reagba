@@ -46,7 +46,9 @@ REAPER 主线程持有容器、UI 请求队列与 WebView。消息回调只入�
 
 ## 本地界面和持久化
 
-`prepare_ui.py` 校验并原样复制 `index.html`、`style.css`、`app.js`；这三份 UI 源文件可以直接放入安装目录的 `web` 使用，不依赖网络服务或内联构建步骤。扩展会确认三份文件齐全，并只从 REAPER 资源目录 `Scripts/zaibuyidao Scripts/ReaGBA/web` 加载界面。宿主拒绝外部导航、新窗口和 WebView 权限请求。控制队列有数量和字节上限，协议使用请求 ID 匹配异步结果。
+`ui/i18n.js` 管理全部界面语言，首启默认英文。界面通过 `set_settings` 保存 `language`，原生层校验标识格式但不枚举语言，后续增加语言无需重编译扩展。缺失译文回退英文；文件选择器通过请求的 `dialog_title` 获取本地化标题。详见 [多语言维护](LOCALIZATION.md)。
+
+`prepare_ui.py` 校验并原样复制 `index.html`、`style.css`、`i18n.js`、`app.js`；这四份 UI 源文件可以直接放入安装目录的 `web` 使用，不依赖网络服务或内联构建步骤。扩展会确认四份文件齐全，并只从 REAPER 资源目录 `Scripts/zaibuyidao Scripts/ReaGBA/web` 加载界面。宿主拒绝外部导航、新窗口和 WebView 权限请求。控制队列有数量和字节上限，协议使用请求 ID 匹配异步结果。
 
 ROM 保持只读。`RuntimePaths` 把全部数据固定到资源目录 `Scripts/zaibuyidao Scripts/ReaGBA`，不兼容旧数据地址。ROM 游戏文件夹和最后一次文件选择位置保存在 `config/preferences.json`。存档按 ROM SHA-256 区分，包含核心版本和完整性检查。写入先完成临时文件，再替换目标文件。测试通过显式环境变量隔离数据，诊断输出不会进入发布包。
 

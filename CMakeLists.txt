@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(ReaGBA VERSION 0.0.7 LANGUAGES C CXX)
+project(ReaGBA VERSION 0.0.8 LANGUAGES C CXX)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 set(CMAKE_C_VISIBILITY_PRESET hidden)
@@ -171,13 +171,13 @@ if(REAGBA_EXTENSION)
     message(FATAL_ERROR "Supported extension platforms: Windows, macOS, Linux")
   endif()
   set_target_properties(reaper_reagba PROPERTIES PREFIX "" OUTPUT_NAME "reaper_reagba-${REAGBA_ARCH}")
-  add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/runtime/index.html" "${CMAKE_BINARY_DIR}/runtime/style.css" "${CMAKE_BINARY_DIR}/runtime/app.js"
+  add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/runtime/index.html" "${CMAKE_BINARY_DIR}/runtime/style.css" "${CMAKE_BINARY_DIR}/runtime/i18n.js" "${CMAKE_BINARY_DIR}/runtime/app.js"
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/scripts/prepare_ui.py" "${CMAKE_SOURCE_DIR}/ui" "${CMAKE_BINARY_DIR}/runtime" "${PROJECT_VERSION}"
-    DEPENDS ui/index.html ui/style.css ui/app.js scripts/prepare_ui.py CMakeLists.txt VERBATIM)
-  add_custom_target(reagba_ui ALL DEPENDS "${CMAKE_BINARY_DIR}/runtime/index.html" "${CMAKE_BINARY_DIR}/runtime/style.css" "${CMAKE_BINARY_DIR}/runtime/app.js")
+    DEPENDS ui/index.html ui/style.css ui/i18n.js ui/app.js scripts/prepare_ui.py CMakeLists.txt VERBATIM)
+  add_custom_target(reagba_ui ALL DEPENDS "${CMAKE_BINARY_DIR}/runtime/index.html" "${CMAKE_BINARY_DIR}/runtime/style.css" "${CMAKE_BINARY_DIR}/runtime/i18n.js" "${CMAKE_BINARY_DIR}/runtime/app.js")
   add_dependencies(reaper_reagba reagba_ui)
   install(TARGETS reaper_reagba RUNTIME DESTINATION UserPlugins COMPONENT ReaGBA LIBRARY DESTINATION UserPlugins COMPONENT ReaGBA)
-  install(FILES "${CMAKE_BINARY_DIR}/runtime/index.html" "${CMAKE_BINARY_DIR}/runtime/style.css" "${CMAKE_BINARY_DIR}/runtime/app.js"
+  install(FILES "${CMAKE_BINARY_DIR}/runtime/index.html" "${CMAKE_BINARY_DIR}/runtime/style.css" "${CMAKE_BINARY_DIR}/runtime/i18n.js" "${CMAKE_BINARY_DIR}/runtime/app.js"
     DESTINATION "${REAGBA_PRODUCT_DIR}/web" COMPONENT ReaGBA)
   if(REAGBA_TESTS)
     add_executable(reagba_paths_verify tests/runtime_paths.cpp)
@@ -186,6 +186,7 @@ if(REAGBA_EXTENSION)
     add_test(NAME release_packaging COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tests/ReleaseTests.py")
     find_program(REAGBA_NODE NAMES node nodejs)
     if(REAGBA_NODE)
+      add_test(NAME localization_catalogs COMMAND "${REAGBA_NODE}" "${CMAKE_SOURCE_DIR}/tests/i18n_catalogs.cjs")
       add_test(NAME webview_transport COMMAND "${REAGBA_NODE}" "${CMAKE_SOURCE_DIR}/tests/BridgeTests.cjs")
     endif()
     if(CMAKE_SYSTEM_NAME STREQUAL "Linux")

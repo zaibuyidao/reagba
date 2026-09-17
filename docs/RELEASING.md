@@ -9,7 +9,7 @@
 
 源码仓库不依赖 ReaScripts 的检出目录。公开包和已安装扩展不读取源码仓库，也不访问私有 GitHub 链接。工作流只在当前源码仓库生成 Release，不推送或更新 ReaScripts。
 
-不要向源码仓库添加 ROM、BIOS、data、verification、third_party、build、dist、浏览器缓存或本地测试截图。修改界面使用 `ui/index.html`、`ui/style.css`、`ui/app.js`；三者必须可以直接一起运行，构建只会原样复制它们。
+不要向源码仓库添加 ROM、BIOS、data、verification、third_party、build、dist、浏览器缓存或本地测试截图。修改界面使用 `ui/index.html`、`ui/style.css`、`ui/i18n.js`、`ui/app.js`；四者必须可以直接一起运行，构建只会原样复制它们。
 
 ## 私有仓库构建
 
@@ -42,11 +42,12 @@ ReaScripts/ReaGBA/
     reagba-webview-aarch64
   web/
     app.js
+    i18n.js
     index.html
     style.css
 ```
 
-同一版本的 `.ext`、5 个平台扩展、2 个 Linux 辅助程序和 3 个 web 文件必须一起整理提交。最终目录除 `.ext` 外正好是 7 个 `extension` 文件和 `app.js`、`index.html`、`style.css`；不再发布 README、第三方声明或 licenses 到 `web`。Linux ZIP 保存可执行位，扩展也会在需要时给自己的辅助程序补执行权限。
+同一版本的 `.ext`、5 个平台扩展、2 个 Linux 辅助程序和 4 个 web 文件必须一起整理提交。最终目录除 `.ext` 外正好是 7 个 `extension` 文件和 `app.js`、`i18n.js`、`index.html`、`style.css`；不再发布 README、第三方声明或 licenses 到 `web`。Linux ZIP 保存可执行位，扩展也会在需要时给自己的辅助程序补执行权限。
 
 `.ext` 由 `scripts/reapack.py` 自动生成。它的下载地址为 `https://raw.githubusercontent.com/zaibuyidao/ReaScripts/$commit/ReaGBA/...`；索引器将 `$commit` 替换为**公开 ReaScripts 仓库的提交**，不会使用私有源码仓库的提交或令牌。每个版本因此固定到对应公开文件。不要手动把它改成私有 Release URL。规则见 [ReaPack 官方打包文档](https://github.com/cfillion/reapack-index/wiki/Packaging-Documentation)。
 
@@ -61,6 +62,7 @@ REAPER resource directory/
   UserPlugins/reaper_reagba-<architecture>.<dll|dylib|so>
   Scripts/zaibuyidao Scripts/ReaGBA/
     web/app.js
+    web/i18n.js
     web/index.html
     web/style.css
     extension/reagba-webview-<architecture>  # Linux only
