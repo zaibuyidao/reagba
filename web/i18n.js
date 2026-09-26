@@ -1,6 +1,5 @@
 'use strict';
-// Add a catalog here to add a language. IDs are stable BCP 47 language tags;
-// labels are written in the language itself. See docs/LOCALIZATION.md.
+// Add a catalog here to add a language. IDs are stable BCP 47 language tags.
 window.ReaGBAI18n = (() => {
  const catalogs = {
   "en": {

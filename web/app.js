@@ -1,6 +1,5 @@
 'use strict';
 // ReaWebAPI owns the WebView and transport. ReaGBA owns the native core session.
-// Standalone regression fixtures may provide nativeRequest before this script.
 (()=>{
  if(window.nativeRequest||!window.reaper?.host)return;
  const runtime=window.reaper,gba=runtime.host.service('reagba');
@@ -24,6 +23,7 @@
  }
  const ready=(async()=>{
   await runtime.lifecycle.ready;
+  await runtime.window.setIconVisible(false);
   await runtime.lifecycle.on('cleanup',cleanup);
   if(!runtime.stream)throw Error('ReaGBA requires ReaWebAPI v0.3.6.4 or later');
   docked=await runtime.window.isDocked();
