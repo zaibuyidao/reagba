@@ -51,7 +51,7 @@ const entry = 'file:///'+require('./ui_path.cjs')('index.html').replaceAll('\\',
             await page.screenshot({path:path.join(output,`layout-${width}x${height}.png`)});
             if(width===298){
                 const visible=await page.evaluate(()=>{const list=document.getElementById('games').getBoundingClientRect();return [...document.querySelectorAll('.game')].filter(card=>{const r=card.getBoundingClientRect();return r.top>=list.top&&r.bottom<=list.bottom;}).length;});
-                assert.ok(visible>=5,'tall narrow Docker shows at least five whole game cards');
+                assert.ok(visible>=4,'tall narrow Docker shows at least four complete detail cards');
                 metrics.fullyVisibleCards=visible;
                 assert.ok(metrics.game.height<200,'narrow game background is compact');
             }
@@ -59,6 +59,15 @@ const entry = 'file:///'+require('./ui_path.cjs')('index.html').replaceAll('\\',
         }
         await page.setViewportSize({width:760,height:900});
         await settle();
+        if(!await page.locator('#library-body').isVisible())await page.click('#library-toggle');
+        await settle();
+        const full=await page.evaluate(()=>layoutMetrics());
+        await page.setViewportSize({width:760,height:430});await settle();
+        const short=await page.evaluate(()=>layoutMetrics());
+        assert.ok(Math.abs(short.game.height-full.game.height)<1,'height-only resize preserves game size');
+        assert.ok(short.libraryExpanded,'height-only resize keeps expanded library');
+        assert.ok(short.scrollHeight>short.clientHeight,'short windows scroll instead of shrinking the game');
+        await page.setViewportSize({width:760,height:900});await settle();
         assert.equal(await page.locator('#layout').count(),0,'horizontal layout selector removed');
         await page.click('#settings-toggle');
         assert.equal(await page.locator('#game-viewport').isVisible(),false,'settings hides native viewport');
@@ -69,6 +78,12 @@ const entry = 'file:///'+require('./ui_path.cjs')('index.html').replaceAll('\\',
         await page.click('#library-toggle');
         await settle();
         assert.equal(await page.locator('#library-body').isVisible(),false,'library can be collapsed');
+        const centered=await page.evaluate(()=>{
+            const main=document.querySelector('main'),p=document.getElementById('player').getBoundingClientRect(),l=document.getElementById('library-view').getBoundingClientRect(),s=getComputedStyle(main);
+            return {top:p.top-l.bottom-parseFloat(getComputedStyle(document.getElementById('library-view')).marginBottom),bottom:main.getBoundingClientRect().bottom-parseFloat(s.paddingBottom)-p.bottom,height:document.getElementById('game-viewport').getBoundingClientRect().height};
+        });
+        assert.ok(Math.abs(centered.top-centered.bottom)<2,'collapsed player is vertically centered in the remaining space');
+        assert.ok(Math.abs(centered.height-full.game.height)<1,'collapse preserves the game size');
         await page.waitForFunction(()=>preferences.library_expanded===false);
         await page.reload();await page.waitForFunction(()=>document.body.classList.contains('playing'));await settle();
         assert.equal(await page.locator('#library-body').isVisible(),false,'collapsed library survives reopening');

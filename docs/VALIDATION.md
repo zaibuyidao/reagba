@@ -1,5 +1,11 @@
 # Native Service / Frame Stream 验证 — 2026-09-26
 
+## v0.1.1 窗口与布局验证 — 2026-09-27
+
+- Windows x64 构建及 7 项 CTest 通过。隔离 REAPER / WebView2 验证独立游戏页及原生标题、暂停画面重放、持续按键、释放按键和收回恢复，原有停靠、存档、Shader 与关闭重开流程通过。
+- 浏览器回归覆盖缩短窗口时保留画面尺寸、空间不足时滚动、折叠后信息置顶、控制置底及画布居中，以及分隔条调整。详情卡片验证覆盖封面居中和按钮边界。双窗口测试覆盖 3px 页面间距、状态栏间距一致性、游戏库展开或折叠时弹出及收回的画布位置一致性、设置同步、输入归属、关闭恢复、重复弹出、打开失败和主窗口重载或关闭。
+- Windows、macOS、Linux 共用网页与 ReaWebAPI 窗口接口。本版本的 macOS / Linux 原生窗口行为尚未实机复测，下表保留此前验证记录。
+
 配套运行时为 ReaWebAPI v0.3.6.4。ReaGBA 保持独立仓库和自身版本号，核心、UI 与适配测试均在本仓库维护。
 
 | 平台 | 构建与自动测试 | 真实 REAPER / Apotris |
@@ -29,6 +35,8 @@ ctest --test-dir build/native -C Release --output-on-failure
 node tests/BridgeTests.cjs
 node tests/frame_decode.cjs
 node tests/reaweb_video.cjs
+node tests/layout_verify.cjs
+node tests/popout_verify.cjs
 ```
 
 前端测试默认读取本仓库 `web/`。浏览器测试需要 Playwright，可用 `REAGBA_NODE_MODULES` 指定模块目录，`REAGBA_BROWSER_CHANNEL=msedge` 使用本机 Edge。

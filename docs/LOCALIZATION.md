@@ -6,7 +6,7 @@ ReaGBA 首次启动固定使用英文，不读取系统或浏览器语言。设�
 
 - `web/i18n.js`：唯一的语言资源与格式化入口。`catalogs` 用 BCP 47 语言标识作为键，`name` 使用语言自己的名称，`messages` 保存全部界面文案。
 - `web/index.html`：静态元素通过 `data-i18n` 标记；提示、无障碍名称和输入提示分别使用 `data-i18n-title`、`data-i18n-aria-label`、`data-i18n-placeholder`。HTML 中保留可直接阅读的英文初始文案。
-- `web/app.js`：动态文案调用 `t(key, values)`，状态、游戏卡片、存档时间、错误提示和文件选择器标题随语言切换更新。排序、大小写搜索、数字和日期采用当前语言的地区规则。
+- `web/app.js`、`web/game.js`、`web/popout.js`：动态文案调用 `t(key, values)`，状态、游戏卡片、存档时间、错误提示和文件选择器标题随语言切换更新。排序、大小写搜索、数字和日期采用当前语言的地区规则。
 - `web/style.css`：为较长标签提供换行空间。详细列表的游玩按钮占独立一行，避免遮住元数据；紧凑列表保留单行标题。
 
 翻译只作为纯文本写入 DOM，不使用 `innerHTML`。游戏标题、路径、ROM 内容和 BIOS 不会被翻译。GBA 的 A/B、L/R、Start/Select 标签、着色器预设名称和引擎键名保持不变。

@@ -63,6 +63,16 @@ const image=fs.existsSync(cached)?'data:image/png;base64,'+fs.readFileSync(cache
     assert.ok(metrics.listScroll<=metrics.listWidth+1,'list overflow '+JSON.stringify(metrics));
     assert.equal(metrics.setting,mode);assert.equal(metrics.fit,'contain');
     if(mode==='compact')assert.ok(metrics.cardHeight<=48,'compact rows are too tall');
+    if(mode==='details'){
+     const cards=await page.locator('.game').evaluateAll(cards=>cards.map(card=>{
+      const box=card.getBoundingClientRect(),cover=card.querySelector('.cover').getBoundingClientRect(),play=card.querySelector('.launch').getBoundingClientRect();
+      return {centerOffset:(cover.top+cover.bottom-box.top-box.bottom)/2,top:cover.top-box.top,bottom:box.bottom-cover.bottom,playBottom:box.bottom-play.bottom};
+     }));
+     for(const card of cards){
+      assert.ok(Math.abs(card.centerOffset)<1,'details cover is vertically centered '+JSON.stringify(card));
+      assert.ok(card.top>=7&&card.bottom>=7&&card.playBottom>=7,'details content stays inside the card '+JSON.stringify(card));
+     }
+    }
     if(mode==='grid'){
      assert.ok(metrics.cardHeight>=metrics.coverWidth+95,'grid content overlaps '+JSON.stringify(metrics));
      assert.ok(Math.abs(metrics.coverHeight-metrics.coverWidth)<1,'grid cover must be square');

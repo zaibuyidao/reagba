@@ -54,7 +54,7 @@ class Packages(unittest.TestCase):
         self.assertIn('@version '+release.version()+'\n',manifest)
         self.assertNotIn('github.com/zaibuyidao/reagba',manifest)
         self.assertNotIn('_REAGBA_SHOW',manifest)
-        self.assertEqual(len(reapack.sources()),10)
+        self.assertEqual(len(reapack.sources()),len(release.PLATFORMS)+len(reapack.WEB_FILES))
         self.assertIn('@link https://forum.cockos.com/showthread.php?t=311202\n',manifest)
         self.assertEqual(manifest.split('@changelog\n')[1],''.join('  '+line+'\n' for line in reapack.CHANGELOG))
         self.assertIn('/Modules/ReaGBA',reapack.BASE_URL)

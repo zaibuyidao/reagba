@@ -10,7 +10,7 @@ ReaGBA 的 CMake 安装组件只安装 `UserPlugins/reaper_reagba-<arch>.*`。Wi
 
 `.github/workflows/build-native.yml` 构建 Windows x64、macOS x86_64/arm64、Linux x86_64/aarch64。平台 ZIP 只含核心二进制和 `ReaGBA-core.json` 校验清单。汇总产物包含五个平台 ZIP、五个核心二进制、ReaPack 包及 SHA256SUMS，不包含 WebView 辅助程序。
 
-`ReaGBA-ReaPack-v<version>.zip` 包内的 `ReaGBA/` 包含 `extension/` 下的五个核心文件、`web/` 下的五个界面和启动文件，以及 `ReaGBA.ext`。发布到 ReaScripts 时将此目录放入 `Modules/`。描述文件安装核心与 Web 文件，Lua 启动器标记为 `nomain`，用户手动加载 `web/zaibuyidao_ReaGBA.lua` 启动界面。`@link` 指向 [REAPER 论坛主题](https://forum.cockos.com/showthread.php?t=311202)。
+`ReaGBA-ReaPack-v<version>.zip` 包内的 `ReaGBA/` 包含 `extension/` 下的五个核心文件、`web/` 下的界面和启动文件，以及 `ReaGBA.ext`。发布到 ReaScripts 时将此目录放入 `Modules/`。描述文件安装核心与 Web 文件，Lua 启动器标记为 `nomain`，用户手动加载 `web/zaibuyidao_ReaGBA.lua` 启动界面。`@link` 指向 [REAPER 论坛主题](https://forum.cockos.com/showthread.php?t=311202)。
 
 发布前递增 `CMakeLists.txt` 中的 ReaGBA 版本号，打包时 `ReaGBA.ext` 的 `@version` 自动读取该版本，无需单独维护。用本次版本的实际改动替换 `scripts/reapack.py` 中的 `CHANGELOG`。GitHub Release 正文与 `ReaGBA.ext` 的 `@changelog` 共用这些条目，不自动追加历史内容或 Full Changelog 链接。现有不可变 Release 不会被覆盖。工作流只发布本仓库的产物，不修改 ReaScripts 或 ReaWebAPI，也不会自动提交跨仓库修改。
 

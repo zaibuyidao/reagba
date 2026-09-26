@@ -1,12 +1,12 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
-const source=fs.readFileSync(require('./ui_path.cjs')('app.js'),'utf8').split('\nconst $=')[0];
+const source=fs.readFileSync(require('./ui_path.cjs')('bridge.js'),'utf8')+'\ninitReaGBABridge();';
 function fixture(){
  const sent=[],requests=[],events={},errors=[],timers=[];let focus=0,frames=0;
  const service={send:(method,payload)=>sent.push({method,payload}),invoke:(method,payload)=>method==='getState'?Promise.resolve({loaded:false}):new Promise((resolve,reject)=>requests.push({method,payload,resolve,reject}))};
- const runtime={lifecycle:{ready:Promise.resolve(),on:async(name,fn)=>events['lifecycle:'+name]=fn},host:{service:name=>{assert.equal(name,'reagba');return service;}},
+ const runtime={lifecycle:{ready:Promise.resolve({windowId:1}),on:async(name,fn)=>events['lifecycle:'+name]=fn},host:{service:name=>{assert.equal(name,'reagba');return service;}},
   stream:{open:async name=>({info:{width:240,height:160},on:(event,fn)=>events['stream:'+event]=fn,close:async()=>sent.push({method:'detach'})})},
   system:{schedule:async(fn,options)=>{const timer={fn,options,stopped:false};timers.push(timer);return async()=>{timer.stopped=true;};}},
-  window:{isDocked:async()=>false,setDocked:async value=>value,focus:async()=>{focus++;}},
+  window:{setIconVisible:async()=>{},isDocked:async()=>false,setDocked:async value=>value,focus:async()=>{focus++;}},
   events:{on:async(name,callback)=>{events[name]=callback;}},dialog:{openFile:async()=>null,selectFolder:async()=>null}};
  const window={reaper:runtime,addEventListener:(name,fn)=>events[name]=fn};
  const document={hidden:false,hasFocus:()=>true,addEventListener:(name,fn)=>events['dom:'+name]=fn,getElementById:()=>({focus(){}})};

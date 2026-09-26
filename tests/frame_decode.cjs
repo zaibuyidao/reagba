@@ -1,5 +1,5 @@
 const assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs');
-const source=fs.readFileSync(require('./ui_path.cjs')('app.js'),'utf8');
+const source=fs.readFileSync(require('./ui_path.cjs')('video.js'),'utf8');
 let decoded;
 const context={window:{devicePixelRatio:1},Uint8Array,settings:{vsync:false,integer_scaling:true,filter:'nearest'},toast:()=>{},atob:text=>Buffer.from(text,'base64').toString('latin1'),
  ImageData:class{constructor(data,width,height){this.data=data;this.width=width;this.height=height;}},

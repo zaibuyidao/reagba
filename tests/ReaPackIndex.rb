@@ -25,9 +25,9 @@ platforms.each do |platform|
   raise 'Unexpected platform-specific files' unless rows.size == 1
 end
 web = sources.select { |s| s['platform'].nil? }
-raise 'Unexpected web assets' unless web.map { |s| s['file'] }.sort == %w[web/zaibuyidao_ReaGBA.lua web/index.html web/style.css web/i18n.js web/app.js].sort
+raise 'Unexpected web assets' unless web.map { |s| s['file'] }.sort == %w[web/zaibuyidao_ReaGBA.lua web/index.html web/style.css web/i18n.js web/app.js web/bridge.js web/video.js web/popout.js web/game.html web/game.js].sort
 raise 'Web assets must install in Scripts' unless web.all? { |s| s['type'] == 'script' }
-raise 'Unexpected source count' unless sources.size == 10
+raise 'Unexpected source count' unless sources.size == 15
 sources.each do |source|
   raise 'Files must not register Lua actions' if source['main']
   raise 'Unexpected private, floating or malformed URL' unless source.text.start_with?('https://raw.githubusercontent.com/zaibuyidao/ReaScripts/' + index.commit + '/Modules/ReaGBA/')

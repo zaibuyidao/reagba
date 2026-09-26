@@ -8,7 +8,7 @@ web/zaibuyidao_ReaGBA.lua → ReaWebAPI WebView
   └─ reaper.stream.open("reagba.video") ← independent binary transport ← emulator thread
 ```
 
-ReaGBA 不链接任何浏览器 SDK，不创建窗口，不注册 command_id、gaccel、hookcommand 或 hwnd_info。扩展的 timer 负责服务延迟注册、游戏手柄轮询、输入超时和控制回复缓存过期。`src/bridge/CoreCommands` 是独立于 UI 的核心命令分发器。
+ReaGBA 核心扩展不链接任何浏览器 SDK，不创建窗口，不注册 command_id、gaccel、hookcommand 或 hwnd_info。扩展的 timer 负责服务延迟注册、游戏手柄轮询、输入超时和控制回复缓存过期。`src/bridge/CoreCommands` 是独立于 UI 的核心命令分发器。
 
 ReaWebAPI 直接加载普通 HTML 目录并注入 `window.reaper`，不复制 runtime/reaper.js、不修改 ReaWebAPI 的基础运行架构。原生各平台 WebView 宿主由 ReaWebAPI 维护。旧 ReaGBA Windows/macOS/Linux 宿主和 Linux UI 辅助进程已删除。
 
@@ -40,7 +40,9 @@ CoreCommands 保持原有核心命令结构；回复 ID 由适配层补回。已
 
 `reagba.video` 为 240×160、RGBA8、960-byte stride 的 Frame Stream。模拟线程发布完整二进制帧，使用三槽有界缓冲。页面卡顿时保留最新帧，WebGL 直接接收 Uint8Array。消费者关闭只解除自己的连接，生产者关闭时通知所有页面。重开窗口可以读取暂停前的最后一帧。
 
-界面保留原有布局、语言和控制。显示偏好使用 `config/ui.json`，核心维护模拟、ROM、封面和存档配置。对话框、停靠和聚焦复用 ReaWebAPI。
+`index.html` 与独立游戏页 `game.html` 共用 `bridge.js` 和 `video.js`。`popout.js` 使用同源存储中的窗口 ID 与短期心跳协调显示和输入归属。主窗口收回画面或关闭后，独立页自动关闭。独立页退出或心跳失效时主页面恢复画面，两者不创建额外核心会话。
+
+界面保留原有语言和控制。显示偏好使用 `config/ui.json`，核心维护模拟、ROM、封面和存档配置。对话框、停靠和聚焦复用 ReaWebAPI。
 
 ReaWebAPI 或 ReaGBA 卸载时，服务关闭回调先停止并等待模拟线程，再关闭流和释放会话。ReaGBA 主动卸载时随后注销服务。旧 ReaScript 调用不要求安装 ReaWebAPI。
 

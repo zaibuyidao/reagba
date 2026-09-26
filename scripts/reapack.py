@@ -5,12 +5,11 @@ import release
 CATEGORY='ReaGBA'
 PLATFORM_IDS={'windows-x64':'win64','macos-x86_64':'darwin64','macos-arm64':'darwin-arm64','linux-x86_64':'linux64','linux-aarch64':'linux-aarch64'}
 BASE_URL='https://raw.githubusercontent.com/zaibuyidao/ReaScripts/$commit/Modules/ReaGBA'
-WEB_FILES=('zaibuyidao_ReaGBA.lua','index.html','style.css','i18n.js','app.js')
+WEB_FILES=('zaibuyidao_ReaGBA.lua','index.html','style.css','i18n.js','app.js','bridge.js','video.js','popout.js','game.html','game.js')
 CHANGELOG=(
-    'Move runtime data to Scripts/zaibuyidao Scripts/Modules/ReaGBA and rename the default ROM folder to roms on Windows, macOS and Linux.',
-    'Rename ui to web and include the web assets and zaibuyidao_ReaGBA.lua launcher in the ReaPack bundle.',
-    'Update the ReaGBA.ext link to the REAPER forum thread.',
-    'Limit release notes and @changelog to the current version without an automatic comparison link.',
+    'Add a canvas-only game window with the game name in its title, 3px page spacing and restoration on Windows, macOS and Linux.',
+    'Preserve game size on height changes and retain the main canvas across pop-out and restore, with collapsed-library information at the top and controls at the bottom.',
+    'Fix detail-card cover alignment and play-button overflow, preserve status spacing when detached, and remove symbols from start, resume and pause buttons.',
 )
 
 def sources():

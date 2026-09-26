@@ -27,6 +27,8 @@ if sys.platform.startswith('linux'):
 shutil.copytree(a.ui,root/'web')
 shutil.copy2(Path(__file__).with_name('ReaWebAPIProbe.js'),root/'web/probe.js')
 with (root/'web/index.html').open('a',encoding='utf-8') as f:f.write('\n<script src="probe.js"></script>\n')
+shutil.copy2(Path(__file__).with_name('ReaWebAPIGameProbe.js'),root/'web/game-probe.js')
+with (root/'web/game.html').open('a',encoding='utf-8') as f:f.write('\n<script src="game-probe.js"></script>\n')
 shutil.copy2(Path(__file__).with_name('ReaWebAPISmoke.lua'),root/'smoke.lua')
 # Original ARM test program, no commercial ROM or Nintendo logo required.
 # Mode 3, BG2 enabled; fill VRAM red, then idle forever.

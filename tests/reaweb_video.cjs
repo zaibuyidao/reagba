@@ -3,7 +3,7 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
 const {chromium}=require(require.resolve('playwright',{paths:[process.env.REAGBA_NODE_MODULES||path.resolve(__dirname,'../node_modules')]}));
 const root=path.resolve(__dirname,'../verification/shaders');
-const app=fs.readFileSync(require('./ui_path.cjs')('app.js'),'utf8');
+const app=fs.readFileSync(require('./ui_path.cjs')('video.js'),'utf8');
 const renderer=app.slice(app.indexOf('function createGameVideo(){'));
 (async()=>{
  const browser=await chromium.launch({headless:true,channel:process.env.REAGBA_BROWSER_CHANNEL,

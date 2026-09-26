@@ -37,6 +37,12 @@
   service.send('input',{mask:0,fast:false,active:false});await wait(async()=>(await service.invoke('getState')).speed===1,'input release');
   await service.invoke('pause');await service.invoke('saveState',{slot:1});await service.invoke('loadState',{slot:1});await call('screenshot');checks.push('pause save load screenshot');
   for(const shader of ['none','lcd3x','lcd-grid-v2']){await saveSettings({shader});await sleep(100);check(gl.getError()===gl.NO_ERROR,'shader '+shader);}
+  localStorage.removeItem('reagba:test:popout');
+  await call('popout');check(document.body.classList.contains('game-detached')&&document.getElementById('game-viewport').getBoundingClientRect().width>0&&getComputedStyle(canvas).visibility==='hidden','main canvas retained without duplicate game image');
+  await wait(()=>localStorage.getItem('reagba:test:popout'),'independent game window report');
+  const popout=JSON.parse(localStorage.getItem('reagba:test:popout'));check(popout.ok,'detached renderer and native keyboard: '+JSON.stringify(popout));
+  await wait(()=>!document.body.classList.contains('game-detached'),'game restored after child close');
+  localStorage.removeItem('reagba:test:popout');
   await saveSettings({language:'zh-CN',library_view:'grid',library_split:.4});
   await call('toggle_dock');check(await reaper.window.isDocked(),'dock');await call('toggle_dock');check(!await reaper.window.isDocked(),'undock');
   await service.invoke('resume');const before=await service.invoke('getState'),start=performance.now(),frames=received;await sleep(3000);
