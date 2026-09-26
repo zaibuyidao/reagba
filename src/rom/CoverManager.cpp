@@ -78,7 +78,6 @@ bool ValidGameCode(const std::string &code) {
         return (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9');
     });
 }
-bool IsLibraryView(const std::string &view) { return view == "details" || view == "grid" || view == "compact"; }
 CoverManager::CoverManager(fs::path cache, CoverFetch fetch) : cache_(std::move(cache)), fetch_(std::move(fetch)) {
     worker_ = std::thread(&CoverManager::Run, this);
 }

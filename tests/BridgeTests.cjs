@@ -1,30 +1,49 @@
-// Exercise real native transport without a browser, ROM, or DOM fixture.
-const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
-const source=fs.readFileSync(path.join(__dirname,'../ui/app.js'),'utf8').split('\nconst $=')[0];
-function fixture(platform){
- const sent=[],timers=new Map(),events={};let timerId=0;
- const transport={postMessage:m=>sent.push(m),addEventListener:(name,fn)=>events[name]=fn};
- const window=platform==='windows'?{chrome:{webview:transport}}:{webkit:{messageHandlers:{reagba:transport}}};
- const context={window,setTimeout:fn=>{timers.set(++timerId,fn);return timerId;},clearTimeout:id=>timers.delete(id)};
- vm.runInNewContext(source,context);return {window,sent,timers,events,transport};
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+const source=fs.readFileSync(require('./ui_path.cjs')('app.js'),'utf8').split('\nconst $=')[0];
+function fixture(){
+ const sent=[],requests=[],events={},errors=[],timers=[];let focus=0,frames=0;
+ const service={send:(method,payload)=>sent.push({method,payload}),invoke:(method,payload)=>method==='getState'?Promise.resolve({loaded:false}):new Promise((resolve,reject)=>requests.push({method,payload,resolve,reject}))};
+ const runtime={lifecycle:{ready:Promise.resolve(),on:async(name,fn)=>events['lifecycle:'+name]=fn},host:{service:name=>{assert.equal(name,'reagba');return service;}},
+  stream:{open:async name=>({info:{width:240,height:160},on:(event,fn)=>events['stream:'+event]=fn,close:async()=>sent.push({method:'detach'})})},
+  system:{schedule:async(fn,options)=>{const timer={fn,options,stopped:false};timers.push(timer);return async()=>{timer.stopped=true;};}},
+  window:{isDocked:async()=>false,setDocked:async value=>value,focus:async()=>{focus++;}},
+  events:{on:async(name,callback)=>{events[name]=callback;}},dialog:{openFile:async()=>null,selectFolder:async()=>null}};
+ const window={reaper:runtime,addEventListener:(name,fn)=>events[name]=fn};
+ const document={hidden:false,hasFocus:()=>true,addEventListener:(name,fn)=>events['dom:'+name]=fn,getElementById:()=>({focus(){}})};
+ const context={window,document,settings:{},defaultKeys:['J','K','Space','Return','D','A','W','S','Q','O'],state:{loaded:false},editing:()=>false,
+  toast:message=>errors.push(message),createGameVideo:()=>({frame:()=>{frames++;},draw(){}}),queueMicrotask,requestAnimationFrame(){}};
+ vm.runInNewContext(source,context);
+ return {window,sent,requests,timers,events,runtime,errors,get frames(){return frames;},get focus(){return focus;}};
 }
+const flush=async()=>{for(let i=0;i<30;i++)await Promise.resolve();};
 (async()=>{
- for(const platform of ['windows','webkit']){
-  const f=fixture(platform),first=f.window.nativeRequest({action:'load_rom',path:'中文.gba'}),second=f.window.nativeRequest({action:'pause'});
-  assert.equal(f.sent[0].path,'中文.gba');assert.notEqual(f.sent[0].id,f.sent[1].id);
-  const result={type:'reply',id:f.sent[1].id,ok:true,result:{running:false}};
-  if(platform==='windows')f.events.message({data:result});else f.window.ReaGBAReceive(result);
-  assert.equal((await second).result.running,false);assert.equal(f.timers.size,1);
-  let state;f.window.onNativeState=value=>state=value;
-  f.window.ReaGBAReceive({type:'state',result:{frames:42}});assert.equal(state.frames,42);
-  f.window.ReaGBAReceive({type:'reply',id:f.sent[0].id,ok:false,error:'Invalid ROM'});
-  assert.equal((await first).error,'Invalid ROM');assert.equal(f.timers.size,0);
-  f.window.ReaGBAReceive({type:'reply',id:999,ok:true});
-  const timed=f.window.nativeRequest({action:'start'});const rejected=assert.rejects(timed,/did not respond/);
-  [...f.timers.values()][0]();await rejected;
-  f.transport.postMessage=()=>{throw Error('bridge unavailable');};
-  await assert.rejects(f.window.nativeRequest({action:'pause'}),/bridge unavailable/);
- }
+ const f=fixture();await flush();assert.equal(f.requests.length,0);
+ const first=f.window.nativeRequest({action:'pause'}),second=f.window.nativeRequest({action:'reset'});await flush();
+ assert.equal(f.requests.length,2);f.requests[1].resolve({loaded:true,title:'中文'});assert.equal((await second).result.title,'中文');
+ f.requests[0].reject(Error('Invalid ROM'));assert.equal((await first).error,'Invalid ROM');
+ let status;f.window.onNativeState=value=>status=value;await f.timers.find(t=>t.options.interval===250).fn();assert.equal(status.reaper,true);
+ await f.window.nativeRequest({action:'toggle_dock'});assert.equal(status.docked,true);
+ assert.equal((await f.window.nativeRequest({action:'open_rom'})).result,null);
+ const large=f.window.nativeRequest({action:'get_cover',code:'TEST'});await flush();
+ const json=JSON.stringify({image:'cover',title:'中文'}),bytes=Buffer.byteLength(json);
+ f.requests.at(-1).resolve({__reagbaResult:{token:'1.9',bytes}});await flush();
+ assert.equal(f.requests.at(-1).method,'readResult');f.requests.at(-1).resolve({text:json,offset:0,bytes});
+ assert.equal((await large).result.title,'中文');
+ f.events['stream:data']({data:new Uint8Array(240*160*4)});assert.equal(f.frames,1);assert(!f.sent.some(v=>v.method==='frame:ack'));
+ f.events['dom:keydown']({code:'KeyJ',preventDefault(){}});f.events['dom:keyup']({code:'KeyJ',preventDefault(){}});
+ assert.equal(f.sent.at(-2).payload.mask,1);assert.equal(f.sent.at(-1).payload.mask,0);
+ f.events.blur();assert.equal(f.sent.at(-1).payload.active,false);
+ const prefs=fixture();let saved=null;prefs.runtime.GetResourcePath=async()=>'/resource';
+ prefs.runtime.fs={stat:async()=>({exists:!!saved}),readFile:async()=>saved,writeFile:async(path,text)=>{saved=text;}};await flush();
+ const corePreferences={keys:['J'],language:'ja',shader:'lcd3x'};
+ const answer=()=>{const cmd=prefs.requests.at(-1);cmd.resolve(corePreferences);return cmd;};
+ let getting=prefs.window.nativeRequest({action:'get_settings'});await flush();answer();let combined=(await getting).result;
+ assert.equal(combined.language,'ja');assert.equal(combined.shader,'lcd3x');assert.equal(combined.library_view,'details');
+ let saving=prefs.window.nativeRequest({action:'set_settings',settings:{language:'zh-CN',shader:'lcd-grid-v2'}});await flush();
+ assert.equal(answer().method,'get_settings');combined=(await saving).result;assert.equal(combined.language,'zh-CN');assert.equal(JSON.parse(saved).shader,'lcd-grid-v2');
+ await assert.rejects(prefs.window.nativeRequest({action:'set_settings',settings:{shader:'broken'}}),/Unknown shader/);
+ getting=prefs.window.nativeRequest({action:'get_settings'});await flush();answer();assert.equal((await getting).result.language,'zh-CN');
+ await f.events['lifecycle:cleanup']();f.events.pagehide();await flush();assert(f.timers.every(t=>t.stopped));assert(f.sent.some(v=>v.method==='detach'));
  const existing=()=>{};const window={nativeRequest:existing};vm.runInNewContext(source,{window});assert.equal(window.nativeRequest,existing);
- console.log('Windows/WebKit replies, out-of-order requests, state events, errors and timeouts passed');
-})().catch(e=>{console.error(e);process.exitCode=1;});
+ assert.deepEqual(f.errors,[]);console.log('PASS: Native Service commands, errors, state, docking, binary frames, latest input, preferences and cleanup');
+})().catch(error=>{console.error(error);process.exitCode=1;});

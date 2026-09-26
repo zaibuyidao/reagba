@@ -82,3 +82,6 @@ h1 [data-i18n]{font:inherit;vertical-align:baseline;padding:0;margin:0;backgroun
 .games[data-view=details] .cover{grid-row:1/3;align-self:center}
 .games[data-view=details] .launch{position:static;grid-column:2;justify-self:end;max-width:100%;overflow-wrap:anywhere}
 #footer-text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.version{flex-shrink:0}
+
+/* WebView framebuffer occupies the existing game rectangle. */
+#game-frame{position:absolute;inset:0;width:100%;height:100%;border-radius:inherit;pointer-events:none;display:none}.playing #game-frame{display:block}

@@ -1,7 +1,6 @@
 #include "app/EmulatorManager.h"
 #include "core/gba/GBACore.h"
 #include "input/KeyBindings.h"
-#include "video/ShaderPreset.h"
 #include <chrono>
 #include <cmath>
 #ifndef REAGBA_VERSION
@@ -24,20 +23,10 @@ EmulatorManager::EmulatorManager(fs::path romDir, fs::path dataDir)
     fs::create_directories(romDir_);
     if (!preferences_.contains("rom_directory") || !preferences_["rom_directory"].is_string())
         preferences_["rom_directory"] = "";
-    // The UI owns the language catalog, so future languages need no native update.
-    if (!preferences_.contains("language") || !preferences_["language"].is_string() ||
-        preferences_["language"].get_ref<const std::string&>().empty())
-        preferences_["language"] = "en";
     NormalizeKeys(preferences_);
     if (!preferences_.contains("auto_download_covers") || !preferences_["auto_download_covers"].is_boolean())
         preferences_["auto_download_covers"] = false;
-    if (!preferences_.contains("library_view") || !preferences_["library_view"].is_string() ||
-        !IsLibraryView(preferences_["library_view"].get<std::string>()))
-        preferences_["library_view"] = "details";
     covers_.Enable(preferences_["auto_download_covers"].get<bool>());
-    if (!preferences_.contains("shader") || !preferences_["shader"].is_string() ||
-        !IsShaderPreset(preferences_["shader"].get<std::string>()))
-        preferences_["shader"] = "none";
     worker_ = std::thread(&EmulatorManager::Run, this);
 }
 EmulatorManager::~EmulatorManager() {
@@ -110,42 +99,15 @@ Json EmulatorManager::Handle(const Json &cmd) {
         auto settings = cmd.at("settings");
         if (!settings.is_object())
             throw std::runtime_error("settings must be an object");
-        if (settings.contains("language")) {
-            const auto &language = settings["language"];
-            if (!language.is_string() || language.get_ref<const std::string&>().empty() ||
-                language.get_ref<const std::string&>().size() > 64 ||
-                language.get_ref<const std::string&>().find_first_not_of(
-                    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-") != std::string::npos)
-                throw std::runtime_error("Invalid language identifier");
-        }
         if (settings.contains("auto_download_covers") && !settings["auto_download_covers"].is_boolean())
             throw std::runtime_error("Automatic cover download must be a boolean");
-        if (settings.contains("library_expanded") && !settings["library_expanded"].is_boolean())
-            throw std::runtime_error("Library expanded must be a boolean");
-        if (settings.contains("library_view") && (!settings["library_view"].is_string() ||
-            !IsLibraryView(settings["library_view"].get<std::string>())))
-            throw std::runtime_error("Unknown library view (expected details, grid or compact)");
-        if (settings.contains("shader") &&
-            (!settings["shader"].is_string() || !IsShaderPreset(settings["shader"].get<std::string>())))
-            throw std::runtime_error("Unknown shader preset (expected none, lcd3x or lcd-grid-v2)");
-        for (const auto *key : {"library_split"}) {
-            if (!settings.contains(key))
-                continue;
-            const auto &value = settings.at(key);
-            if (!value.is_null() && (!value.is_number() || !std::isfinite(value.get<double>()) ||
-                                    value.get<double>() < 0 || value.get<double>() > 1))
-                throw std::runtime_error("Library split must be a ratio from 0 to 1, or null for automatic");
-        }
         for (const auto *key : {"rom_directory", "last_rom_directory"})
             if (settings.contains(key) &&
                 (!settings[key].is_string() || settings[key].get<std::string>().empty()))
                 throw std::runtime_error("ROM directories must be non-empty paths");
         for (auto it = settings.begin(); it != settings.end(); ++it)
-            if (it.key() == "keys" || it.key() == "integer_scaling" || it.key() == "filter" ||
-                it.key() == "bios" || it.key() == "vsync" || it.key() == "fast_forward_key" ||
-                it.key() == "library_split" || it.key() == "library_expanded" || it.key() == "rom_directory" ||
-                it.key() == "last_rom_directory" || it.key() == "shader" ||
-                it.key() == "auto_download_covers" || it.key() == "library_view" || it.key() == "language")
+            if (it.key() == "keys" || it.key() == "bios" || it.key() == "fast_forward_key" ||
+                it.key() == "rom_directory" || it.key() == "last_rom_directory" || it.key() == "auto_download_covers")
                 preferences_[it.key()] = it.value();
         Persist();
         covers_.Enable(preferences_.value("auto_download_covers", false));

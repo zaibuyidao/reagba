@@ -21,7 +21,7 @@ if(cmd.action==='scan_roms')result=Array.from({length:18},(_,i)=>({...fixture.ga
 if(cmd.action==='get_save_states')result=[];
 return {ok:true,result};};
 `;
-const entry = 'file:///'+path.join(root,'ui/index.html').replaceAll('\\','/');
+const entry = 'file:///'+require('./ui_path.cjs')('index.html').replaceAll('\\','/');
 (async()=>{
     const env=Object.fromEntries(Object.entries(process.env).map(([key,value])=>[key.toUpperCase(),value]));
     const browser=await chromium.launch({headless:true,...(process.env.REAGBA_BROWSER_CHANNEL?{channel:process.env.REAGBA_BROWSER_CHANNEL}:{}),env});

@@ -1,23 +1,150 @@
 'use strict';
-// REAPER extension transport. The optional standalone test host supplies its own binding.
+// ReaWebAPI owns the WebView and transport. ReaGBA owns the native core session.
+// Standalone regression fixtures may provide nativeRequest before this script.
 (()=>{
- if(window.nativeRequest)return;
- const web=window.chrome?.webview,kit=window.webkit?.messageHandlers?.reagba;
- if(!web&&!kit)return;
- let next=0;const pending=new Map();
- window.ReaGBAReceive=message=>{
-   if(message.type==='state'){window.onNativeState?.(message.result);return;}
-   const entry=pending.get(message.id);if(!entry)return;
-   pending.delete(message.id);clearTimeout(entry.timer);entry.resolve(message);
+ if(window.nativeRequest||!window.reaper?.host)return;
+ const runtime=window.reaper,gba=runtime.host.service('reagba');
+ let inputReady=false,docked=false,blocked=false,video=null,stream=null,stopStatus=null,stopInput=null;
+ const pressed=new Set();
+ const enrich=value=>value&&typeof value==='object'&&'loaded' in value?{...value,reaper:true,docked}:value;
+ const report=error=>toast(error.message,true);
+ const sendInput=value=>{if(inputReady)gba.send('input',value);};
+ const focusGame=async()=>{await runtime.window.focus();document.getElementById('game-viewport').focus({preventScroll:true});};
+ async function invoke(method,payload){
+  const result=await gba.invoke(method,payload),large=result?.__reagbaResult;
+  if(!large)return result;
+  if(!Number.isSafeInteger(large.bytes)||large.bytes<1||large.bytes>8*1024*1024)throw Error('Invalid core result size');
+  let text='',offset=0;
+  while(offset<large.bytes){
+   const part=await gba.invoke('readResult',{token:large.token,offset});
+   if(part.offset!==offset||!Number.isSafeInteger(part.bytes)||part.bytes<1||offset+part.bytes>large.bytes||typeof part.text!=='string')throw Error('Invalid core result chunk');
+   text+=part.text;offset+=part.bytes;
+  }
+  return JSON.parse(text);
+ }
+ const ready=(async()=>{
+  await runtime.lifecycle.ready;
+  await runtime.lifecycle.on('cleanup',cleanup);
+  if(!runtime.stream)throw Error('ReaGBA requires ReaWebAPI v0.3.6.4 or later');
+  docked=await runtime.window.isDocked();
+  await runtime.events.on('windowstatechange',value=>{
+   docked=value.docked;
+   if(!value.focused)release();
+   if(window.onNativeState)window.onNativeState(enrich(state));
+  });
+  await gba.invoke('getState');inputReady=true;
+  stream=await runtime.stream.open('reagba.video');
+  stream.on('data',frame=>{video??=createGameVideo();video.frame({width:stream.info.width,height:stream.info.height,data:frame.data});});
+  stream.on('error',report);
+  let updating=false;
+  stopStatus=await runtime.system.schedule(async()=>{
+   if(updating)return;updating=true;
+   try{window.onNativeState?.(enrich(await gba.invoke('getState')));}catch(error){report(error);}finally{updating=false;}
+  },{delay:250,interval:250});
+ })();
+ const request=async command=>{
+  await ready;
+  const {action,...payload}=command;
+  try{return {ok:true,result:enrich(await invoke(action,payload))};}
+  catch(error){return {ok:false,error:error.message};}
  };
- web?.addEventListener('message',event=>window.ReaGBAReceive(event.data));
- window.nativeRequest=command=>new Promise((resolve,reject)=>{
-   const id=++next;
-   const timer=setTimeout(()=>{pending.delete(id);reject(Error(window.ReaGBAI18n?.t('timeout')||'The native extension did not respond. Reopen ReaGBA.'));},30000);
-   pending.set(id,{resolve,timer});
-   try{(web||kit).postMessage({...command,id});}catch(error){clearTimeout(timer);pending.delete(id);reject(error);}
+ // Display preferences belong to the WebView. Import legacy values on first run
+ // so existing language, shader and library layout choices survive migration.
+ const displayDefaults={language:'en',library_view:'details',shader:'none',integer_scaling:true,filter:'nearest',vsync:true};
+ const displayKeys=new Set([...Object.keys(displayDefaults),'library_split','library_expanded']);
+ let displayPreferences=null,displayPath='',preferencesQueue=Promise.resolve();
+ function validateDisplay(values){
+  if('language' in values&&(typeof values.language!=='string'||! /^[A-Za-z0-9-]{1,64}$/.test(values.language)))throw Error('Invalid language identifier');
+  if('library_view' in values&&!['details','grid','compact'].includes(values.library_view))throw Error('Unknown library view (expected details, grid or compact)');
+  if('shader' in values&&!['none','lcd3x','lcd-grid-v2'].includes(values.shader))throw Error('Unknown shader preset (expected none, lcd3x or lcd-grid-v2)');
+  if('library_split' in values&&values.library_split!==null&&(typeof values.library_split!=='number'||!Number.isFinite(values.library_split)||values.library_split<0||values.library_split>1))throw Error('Library split must be a ratio from 0 to 1, or null for automatic');
+  for(const name of ['library_expanded','integer_scaling','vsync'])if(name in values&&typeof values[name]!=='boolean')throw Error('Invalid display preference: '+name);
+  if('filter' in values&&!['nearest','linear'].includes(values.filter))throw Error('Invalid texture filter');
+ }
+ function preferences(command){
+  const task=preferencesQueue.catch(()=>{}).then(async()=>{
+   const display={},core={};
+   for(const [key,value] of Object.entries(command.settings||{}))(displayKeys.has(key)?display:core)[key]=value;
+   validateDisplay(display);
+   const result=await request(Object.keys(core).length?{action:'set_settings',settings:core}:{action:'get_settings'});
+   if(!result.ok)return result;
+   if(!displayPreferences){
+    displayPath=(await runtime.GetResourcePath())+'/Scripts/zaibuyidao Scripts/ReaGBA/config/ui.json';
+    const loaded={...displayDefaults};
+    for(const key of displayKeys)if(key in result.result)loaded[key]=result.result[key];
+    if((await runtime.fs.stat(displayPath)).exists){
+     const saved=JSON.parse(await runtime.fs.readFile(displayPath));
+     if(!saved||typeof saved!=='object'||Array.isArray(saved))throw Error('Invalid UI preferences');
+     validateDisplay(saved);for(const key of displayKeys)if(key in saved)loaded[key]=saved[key];
+    }
+    displayPreferences=loaded;
+   }
+   if(Object.keys(display).length){
+    const next={...displayPreferences,...display};
+    await runtime.fs.writeFile(displayPath,JSON.stringify(next),{overwrite:true});displayPreferences=next;
+   }
+   return {...result,result:{...result.result,...displayPreferences}};
+  });
+  preferencesQueue=task;return task;
+ }
+
+ window.nativeRequest=async command=>{
+  await ready;
+  const ok=result=>({ok:true,result});
+  switch(command.action){
+   case 'game_viewport':video?.draw();return ok(true);
+   case 'keyboard_context':blocked=command.blocked;if(blocked)release();return ok(true);
+   case 'focus_game':await focusGame();return ok(true);
+   case 'toggle_dock':docked=await runtime.window.setDocked(!docked);window.onNativeState?.(enrich(state));return ok(true);
+   case 'fullscreen':await document.getElementById('game-viewport').requestFullscreen();return ok(true);
+   case 'open_rom':{
+    release();
+    const path=await runtime.dialog.openFile({title:command.dialog_title,initialPath:command.initial_path,filters:[{name:'GBA ROM',extensions:['gba']}]});
+    if(!path)return ok(null);
+    const result=await request({action:'load_rom',path});if(result.ok)await focusGame();return result;
+   }
+   case 'select_rom_directory':{
+    release();
+    const path=await runtime.dialog.selectFolder({title:command.dialog_title,initialPath:command.initial_path});
+    return path?preferences({action:'set_settings',settings:{rom_directory:path,last_rom_directory:path}}):ok(null);
+   }
+  }
+  const result=await (command.action==='get_settings'||command.action==='set_settings'?preferences(command):request(command));
+  if(result.ok&&(command.action==='load_rom'||command.action==='start'))await focusGame();
+  if(result.ok&&(command.action==='set_settings'||command.action==='get_settings')){
+   // Draw after the existing caller installs the returned preferences.
+   queueMicrotask(()=>requestAnimationFrame(()=>video?.draw()));
+   release();
+  }
+  return result;
+ };
+ const keyName=code=>({ArrowUp:'Up',ArrowDown:'Down',ArrowLeft:'Left',ArrowRight:'Right',Enter:'Return',Space:'Space',Backspace:'Backspace',ShiftLeft:'Left Shift',ShiftRight:'Right Shift',ControlLeft:'Left Ctrl',ControlRight:'Right Ctrl',AltLeft:'Left Alt',AltRight:'Right Alt',Escape:'Escape',Tab:'Tab'}[code]||(/^Key[A-Z]$/.test(code)?code.slice(3):/^Digit[0-9]$/.test(code)?code.slice(5):code));
+ function input(){
+  const active=!blocked&&!editing()&&document.hasFocus()&&!document.hidden;
+  let mask=0;const keys=settings.keys||defaultKeys;
+  if(active)for(let i=0;i<10;i++)if(pressed.has(keys[i]))mask|=1<<i;
+  const fast=active&&pressed.has(settings.fast_forward_key||'L');
+  sendInput({mask,fast,active});
+ }
+ function release(){pressed.clear();sendInput({mask:0,fast:false,active:false});}
+ document.addEventListener('keydown',event=>{
+  if(blocked||editing())return;
+  const key=keyName(event.code);
+  if(!(settings.keys||defaultKeys).includes(key)&&key!==(settings.fast_forward_key||'L'))return;
+  event.preventDefault();if(pressed.has(key))return;pressed.add(key);input();
  });
+ document.addEventListener('keyup',event=>{const key=keyName(event.code);if(pressed.delete(key)){event.preventDefault();input();}});
+ window.addEventListener('blur',release);
+ document.addEventListener('visibilitychange',()=>{if(document.hidden)release();});
+ ready.then(async()=>{stopInput=await runtime.system.schedule(input,{delay:200,interval:200});}).catch(report);
+ let disposed=false;
+ function cleanup(){
+  if(disposed)return;disposed=true;release();
+  return Promise.all([stopStatus?.(),stopInput?.(),stream?.close()]);
+ }
+ window.addEventListener('pagehide',()=>{if(!disposed){disposed=true;stopStatus?.();stopInput?.();stream?.close();}});
 })();
+
 const $=id=>document.getElementById(id);
 const i18n=window.ReaGBAI18n,t=(key,values)=>i18n.t(key,values);
 let games=[],filter='all',selected=null,state={loaded:false,running:false,speed:1},slot=1,slots=[],settings={},binding=-1;
@@ -126,7 +253,7 @@ $('volume').oninput=()=>$('volume-value').textContent=$('volume').value+'%';$('v
 $('integer').onchange=run(()=>saveSettings({integer_scaling:$('integer').checked}));$('vsync').onchange=run(()=>saveSettings({vsync:$('vsync').checked}));$('filter').onchange=run(()=>saveSettings({filter:$('filter').value}));$('skip').onchange=run(()=>call('set_frame_skip',{value:Number($('skip').value)}));$('save-bios').onclick=run(async()=>{await saveSettings({bios:$('bios').value.trim()});toast(t('biosSaved'));});
 $('choose-rom-directory').onclick=run(async()=>{const chosen=await call('select_rom_directory',{dialog_title:t('dialogFolder'),initial_path:settings.rom_directory||''});if(!chosen)return;settings=chosen;$('rom-directory').value=settings.rom_directory||'';await scan();toast(t('folderSaved'));});
 
-// The library takes surplus height; the native game rectangle always stays 3:2.
+// The library takes surplus height; the game rectangle always stays 3:2.
 let libraryPreference=null,splitDrag=null,paneBounds=null,splitSaveTimer;
 const splitKey=()=>'library_split';
 const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
@@ -205,7 +332,7 @@ function updateKeyboardContext(){const blocked=editing();if(blocked!==keyboardCo
 document.addEventListener('focusin',updateKeyboardContext,true);
 document.addEventListener('focusout',()=>queueMicrotask(updateKeyboardContext),true);
 $('game-viewport').onclick=run(()=>call('focus_game'));
-// Only a rectangle crosses the bridge; every game pixel stays in the native GPU view.
+// Keep the original layout; the ReaWebAPI adapter redraws the WebView canvas.
 let viewportQueued=false,lastViewport='';
 function layoutMetrics(){const box=id=>{const r=$(id).getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height,bottom:r.bottom,right:r.right};};return {mode:'vertical',window:{width:innerWidth,height:innerHeight},game:box('game-viewport'),save:box('save'),load:box('load'),player:box('player'),library:box('library-view'),splitter:box('library-splitter'),libraryExpanded:!$('library-body').hidden,mainBottom:document.querySelector('main').getBoundingClientRect().bottom,scrollHeight:document.querySelector('main').scrollHeight,clientHeight:document.querySelector('main').clientHeight};}
 function scheduleViewport(){if(viewportQueued)return;viewportQueued=true;requestAnimationFrame(()=>{viewportQueued=false;sizePanes();const r=$('game-viewport').getBoundingClientRect(),m=document.querySelector('main').getBoundingClientRect();const rect={x:r.x,y:r.y,width:r.width,height:r.height,clipTop:m.top,clipBottom:m.bottom,clientWidth:innerWidth,visible:state.loaded&&r.width>0&&r.bottom>m.top&&r.top<m.bottom};const serialized=JSON.stringify(rect);if(serialized!==lastViewport){lastViewport=serialized;call('game_viewport',{rect,layout:layoutMetrics()}).catch(error=>toast(error.message,true));}});}
@@ -232,4 +359,150 @@ $('language').onchange=run(async()=>{
  finally{$('language').disabled=false;}
 });
 i18n.apply();
-renderSlots();run(async()=>{settings=await call('get_settings');applyLanguage(settings.language);$('language').disabled=false;libraryPreference=typeof settings.library_expanded==='boolean'?settings.library_expanded:null;renderLibrarySettings();scheduleViewport();$('rom-directory').value=settings.rom_directory||'';$('integer').checked=settings.integer_scaling!==false;$('vsync').checked=settings.vsync!==false;$('filter').value=settings.filter||'nearest';renderShader();$('bios').value=settings.bios||'';renderKeys();await scan();const s=await call('get_emulator_state');$('volume').value=Math.round(s.volume*100);$('volume-value').textContent=$('volume').value+'%';onNativeState(s);})();// The game framebuffer and PCM never enter this script.
+renderSlots();run(async()=>{settings=await call('get_settings');applyLanguage(settings.language);$('language').disabled=false;libraryPreference=typeof settings.library_expanded==='boolean'?settings.library_expanded:null;renderLibrarySettings();scheduleViewport();$('rom-directory').value=settings.rom_directory||'';$('integer').checked=settings.integer_scaling!==false;$('vsync').checked=settings.vsync!==false;$('filter').value=settings.filter||'nearest';renderShader();$('bios').value=settings.bios||'';renderKeys();await scan();const s=await call('get_emulator_state');$('volume').value=Math.round(s.volume*100);$('volume-value').textContent=$('volume').value+'%';onNativeState(s);})();// PCM remains in the GBA core extension.
+
+// GBA pixels are presented inside the WebView. PCM stays in the core extension.
+// LCD3X: Gigaherz's public-domain sinusoidal mask (libretro/glsl-shaders).
+// lcd-grid-v2: cgwg's integrated LCD subpixel model, preserving ReaGBA's equations.
+function createGameVideo(){
+ const holder=document.getElementById('game-viewport'),canvas=document.createElement('canvas');
+ canvas.id='game-frame';canvas.setAttribute('aria-hidden','true');holder.append(canvas);
+ const gl=canvas.getContext('webgl2',{alpha:false,antialias:false,depth:false,stencil:false,preserveDrawingBuffer:true});
+ let pixels=null,queued=false,program,texture,ctx,source,sourceContext;
+ if(gl){
+  const compile=(type,text)=>{const shader=gl.createShader(type);gl.shaderSource(shader,text);gl.compileShader(shader);if(!gl.getShaderParameter(shader,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(shader));return shader;};
+  program=gl.createProgram();
+  gl.attachShader(program,compile(gl.VERTEX_SHADER,`#version 300 es
+precision highp float;
+out vec2 uv;
+void main(){uv=vec2((gl_VertexID<<1)&2,gl_VertexID&2);gl_Position=vec4(uv*vec2(2,-2)+vec2(-1,1),0,1);}`));
+  gl.attachShader(program,compile(gl.FRAGMENT_SHADER,`#version 300 es
+precision highp float;
+precision highp int;
+in vec2 uv;
+uniform sampler2D frame;
+uniform vec2 sourceSize;
+uniform vec2 outputSize;
+uniform int shaderPreset;
+out vec4 color;
+vec3 sampleFrame(vec2 coordinate){return texture(frame,coordinate).rgb;}
+vec3 fetchFrame(ivec2 texel){return texelFetch(frame,clamp(texel,ivec2(0),ivec2(sourceSize)-1),0).rgb;}
+
+vec3 lcd3x(vec2 uv) {
+    const float pi = 3.141592654;
+    vec2 phase = uv * sourceSize * (2.0 * pi);
+    vec3 mask = (4.0 + sin(phase.x + pi * vec3(0.5, -1.0/6.0, -5.0/6.0))) / 5.0;
+    return sampleFrame(uv) * mask * ((16.0 + sin(phase.y)) / 17.0);
+}
+
+// Antiderivatives of the squared horizontal and vertical subpixel profiles:
+// (1-z^2-z^4+z^6)^2 and (1-2z^4+z^6)^2, supported on [-1,1].
+vec3 profileIntegral(vec3 z, bool horizontal) {
+    vec3 q = z*z;
+    if (horizontal)
+        return z*(1.0+q*(-2.0/3.0+q*(-1.0/5.0+q*(4.0/7.0+q*(-1.0/9.0+q*(-2.0/11.0+q/13.0))))));
+    return z*(1.0+q*q*(-4.0/5.0+q*(2.0/7.0+q*(4.0/9.0+q*(-4.0/11.0+q/13.0)))));
+}
+vec3 coverage(vec3 distance, float footprint, float radius, bool horizontal) {
+    vec3 lo = clamp((distance - footprint*0.5) / radius, -1.0, 1.0);
+    vec3 hi = clamp((distance + footprint*0.5) / radius, -1.0, 1.0);
+    return max((profileIntegral(hi, horizontal) - profileIntegral(lo, horizontal)) * (radius/footprint),
+               vec3(0.0, 0.0, 0.0));
+}
+vec3 lcdLight(ivec2 texel) {
+    vec3 value = fetchFrame(texel) + 0.05;
+    return value * value * value;
+}
+vec3 lcdGrid(vec2 uv) {
+    vec2 position = uv*sourceSize - 0.4999;
+    ivec2 origin = ivec2(floor(position));
+    vec2 fraction = position - vec2(origin);
+    // Physical output pixels, not the WebView's CSS size (important on HiDPI).
+    vec2 footprint = sourceSize / max(outputSize, vec2(1.0, 1.0));
+    vec3 leftMask = coverage(fraction.x*3.0 + vec3(1.0, 0.0, -1.0), footprint.x*3.0, 1.5, true);
+    vec3 rightMask = coverage(fraction.x*3.0 + vec3(-2.0, -3.0, -4.0), footprint.x*3.0, 1.5, true);
+    vec3 rows = coverage(vec3(fraction.y, fraction.y-1.0, 0.0), footprint.y, 0.63, false);
+    vec3 upper = lcdLight(origin)*leftMask + lcdLight(origin+ivec2(1,0))*rightMask;
+    vec3 lower = lcdLight(origin+ivec2(0,1))*leftMask + lcdLight(origin+ivec2(1,1))*rightMask;
+    return pow(max(upper*rows.x + lower*rows.y, vec3(0.0,0.0,0.0)), vec3(1.0/2.2,1.0/2.2,1.0/2.2));
+}
+vec3 shadeFrame(vec2 uv) {
+    if (shaderPreset == 1) return lcd3x(uv);
+    if (shaderPreset == 2) return lcdGrid(uv);
+    return sampleFrame(uv);
+}
+
+void main(){color=vec4(shadeFrame(uv),1.0);}`));
+  gl.linkProgram(program);if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(program));
+  gl.useProgram(program);texture=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,texture);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+  gl.uniform1i(gl.getUniformLocation(program,'frame'),0);gl.uniform2f(gl.getUniformLocation(program,'sourceSize'),240,160);
+  gl.disable(gl.DITHER);
+ }else{
+  ctx=canvas.getContext('2d',{alpha:false});source=document.createElement('canvas');source.width=240;source.height=160;sourceContext=source.getContext('2d');
+ }
+ // CPU fallback uses the same subpixel equations when WebGL2 is unavailable.
+ function softwareShader(width,height,preset){
+  const image=ctx.createImageData(width,height),out=image.data;
+  const sample=(x,y,c)=>pixels[(Math.max(0,Math.min(159,y))*240+Math.max(0,Math.min(239,x)))*4+c]/255;
+  const integral=(z,h)=>{const q=z*z;return h?z*(1+q*(-2/3+q*(-1/5+q*(4/7+q*(-1/9+q*(-2/11+q/13)))))):z*(1+q*q*(-4/5+q*(2/7+q*(4/9+q*(-4/11+q/13)))));};
+  const coverage=(distance,footprint,radius,h)=>{
+   const lo=Math.max(-1,Math.min(1,(distance-footprint*.5)/radius)),hi=Math.max(-1,Math.min(1,(distance+footprint*.5)/radius));
+   return Math.max(0,(integral(hi,h)-integral(lo,h))*radius/footprint);
+  };
+  const columns=Array.from({length:width},(_,x)=>{
+   const u=(x+.5)*240/width,position=u-.4999,origin=Math.floor(position),fraction=position-origin;
+   return {u,origin,left:[1,0,-1].map(n=>coverage(fraction*3+n,240/width*3,1.5,true)),right:[-2,-3,-4].map(n=>coverage(fraction*3+n,240/width*3,1.5,true))};
+  });
+  for(let y=0;y<height;y++){
+   const v=(y+.5)*160/height,position=v-.4999,origin=Math.floor(position),fraction=position-origin;
+   const upper=coverage(fraction,160/height,.63,false),lower=coverage(fraction-1,160/height,.63,false);
+   for(let x=0;x<width;x++){
+    const column=columns[x],offset=(y*width+x)*4;
+    for(let c=0;c<3;c++){
+     let value;
+     if(preset==='lcd3x')value=sample(Math.floor(column.u),Math.floor(v),c)*(4+Math.sin(column.u*2*Math.PI+Math.PI*[.5,-1/6,-5/6][c]))/5*(16+Math.sin(v*2*Math.PI))/17;
+     else{
+      const light=(sx,sy)=>Math.pow(sample(sx,sy,c)+.05,3);
+      const top=light(column.origin,origin)*column.left[c]+light(column.origin+1,origin)*column.right[c];
+      const bottom=light(column.origin,origin+1)*column.left[c]+light(column.origin+1,origin+1)*column.right[c];
+      value=Math.pow(Math.max(0,top*upper+bottom*lower),1/2.2);
+     }
+     out[offset+c]=Math.max(0,Math.min(255,Math.round(value*255)));
+    }
+    out[offset+3]=255;
+   }
+  }
+  return image;
+ }
+
+ function drawNow(){
+  queued=false;if(!pixels)return;
+  const ratio=window.devicePixelRatio||1,w=Math.max(1,Math.round(holder.clientWidth*ratio)),h=Math.max(1,Math.round(holder.clientHeight*ratio));
+  if(canvas.width!==w)canvas.width=w;if(canvas.height!==h)canvas.height=h;
+  let scale=Math.min(w/240,h/160);if(settings.integer_scaling!==false&&scale>=1)scale=Math.floor(scale);
+  const width=Math.max(1,Math.floor(240*scale)),height=Math.max(1,Math.floor(160*scale));
+  const x=Math.floor((w-width)/2),y=Math.floor((h-height)/2);
+  if(gl){
+   gl.viewport(0,0,w,h);gl.clearColor(0,0,0,1);gl.clear(gl.COLOR_BUFFER_BIT);gl.viewport(x,y,width,height);
+   const preset=settings.shader==='lcd3x'?1:settings.shader==='lcd-grid-v2'?2:0;
+   const filter=!preset&&settings.filter==='linear'?gl.LINEAR:gl.NEAREST;
+   gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,filter);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,filter);
+   gl.uniform2f(gl.getUniformLocation(program,'outputSize'),width,height);gl.uniform1i(gl.getUniformLocation(program,'shaderPreset'),preset);
+   gl.drawArrays(gl.TRIANGLES,0,3);
+  }else{
+   ctx.fillStyle='#000';ctx.fillRect(0,0,w,h);
+   if(settings.shader==='lcd3x'||settings.shader==='lcd-grid-v2')ctx.putImageData(softwareShader(width,height,settings.shader),x,y);
+   else{ctx.imageSmoothingEnabled=settings.filter==='linear';ctx.drawImage(source,x,y,width,height);}
+  }
+ }
+ function draw(){if(settings.vsync===false)drawNow();else if(!queued){queued=true;requestAnimationFrame(drawNow);}}
+ canvas.addEventListener('webglcontextlost',event=>{event.preventDefault();toast('Graphics context lost. Reopen ReaGBA.',true);});
+ return {draw,frame(message){
+  if(message.width!==240||message.height!==160||!(message.data instanceof Uint8Array)||message.data.byteLength!==240*160*4)throw Error('Invalid GBA frame');
+  pixels=message.data;
+  if(gl)gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,240,160,0,gl.RGBA,gl.UNSIGNED_BYTE,pixels);
+  else sourceContext.putImageData(new ImageData(new Uint8ClampedArray(pixels.buffer),240,160),0,0);
+  draw();
+ }};
+}

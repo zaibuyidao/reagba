@@ -1,7 +1,7 @@
-#include "bridge/WebBridge.h"
+#include "bridge/CoreCommands.h"
 #include <set>
 namespace reagba {
-void WebBridge::Request(const std::string &text, EmulatorManager::Reply reply) {
+void CoreCommands::Request(const std::string &text, EmulatorManager::Reply reply) {
     try {
         if (text.size() > 65536)
             throw std::runtime_error("Request exceeds 64 KiB");

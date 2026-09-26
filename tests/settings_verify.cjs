@@ -5,7 +5,7 @@ const { pathToFileURL } = require('node:url');
 const { chromium } = require(require.resolve('playwright', {
     paths: [process.env.REAGBA_NODE_MODULES || path.resolve(__dirname, '../node_modules')],
 }));
-const entry = pathToFileURL(path.resolve(__dirname, '../ui/index.html')).href;
+const entry = pathToFileURL(require('./ui_path.cjs')('index.html')).href;
 const output = path.resolve(__dirname, '../verification/settings');
 
 (async () => {

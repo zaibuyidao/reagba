@@ -19,7 +19,6 @@ using CoverFetch = std::function<CoverDownload(const std::string &, size_t, cons
 // Only paths on raw.githubusercontent.com are accepted; no ROM data is sent.
 CoverDownload DownloadCoverFile(const std::string &, size_t, const CoverCancel &);
 bool ValidGameCode(const std::string &);
-bool IsLibraryView(const std::string &);
 
 class CoverManager {
   public:

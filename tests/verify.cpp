@@ -1,8 +1,7 @@
 #include "core/gba/GBACore.h"
 #include "app/EmulatorManager.h"
-#include "bridge/WebBridge.h"
+#include "bridge/CoreCommands.h"
 #include "save/SaveManager.h"
-#include "extension/WindowState.h"
 #include "input/KeyBindings.h"
 #include <iostream>
 #include <future>
@@ -21,15 +20,6 @@ static std::string FrameHash(const Frame &frame) {
     return SHA256({data, data + sizeof(frame)});
 }
 static void SelfTest() {
-    WindowState window;
-    window.Restore({{"x",-1200},{"y",80},{"width",940},{"height",720},{"docked",true},{"dock_id",3},{"maximized",true}});
-    WindowState restored;
-    restored.Restore(Json::parse(window.ToJson().dump()));
-    Require(restored.ToJson()==window.ToJson(),"Window geometry and docker did not round-trip");
-    restored.Restore({{"x",1e30},{"width",-1},{"height","900"},{"dock_id",40},{"docked","true"}});
-    Require(restored.ToJson()==window.ToJson(),"Invalid window settings replaced valid geometry");
-    WindowState legacyWindow;legacyWindow.Restore({{"docked",true}});
-    Require(legacyWindow.docked && legacyWindow.width==760,"Old dock-only settings rejected");
     Require(SHA256({}) == "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
             "SHA-256 empty vector");
     Require(SHA256({'a', 'b', 'c'}) == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
@@ -74,32 +64,14 @@ static void SelfTest() {
         EmulatorManager manager(defaultROM,settingsRoot/"ReaGBA");
         auto settings=Call(manager,{{"action","get_settings"}}).at("result");
         Require(settings.at("rom_directory")=="","ROM folder must remain empty until selected");
-        Require(settings.at("shader")=="none","Shader must default to off");
         Require(settings.at("auto_download_covers")==false,"Covers must default to offline");
-        Require(settings.at("library_view")=="details","Default library view mismatch");
-        Require(settings.at("language")=="en","First launch must use English");
-        // Include a future catalog to ensure native code does not whitelist languages.
-        for (const auto *language : {"en", "zh-CN", "zh-TW", "ja", "ko", "es", "de", "fr", "pt-BR"})
-            Require(Call(manager,{{"action","set_settings"},{"settings",{{"language",language}}}}).at("result").at("language")==language,"Language setting rejected");
-        for (const Json &language : {Json(""),Json(1),Json(nullptr),Json("../en"),Json(std::string(65,'a'))})
-            Require(!Call(manager,{{"action","set_settings"},{"settings",{{"language",language}}}}).value("ok",true),"Invalid language accepted");
         Require(settings.at("keys")==DefaultKeys() && settings.at("fast_forward_key")=="L","Default keyboard mismatch");
         Require(std::abs(manager.volume.load()-.3f)<.0001f,"Volume must default to 30 percent");
-        Require(!Call(manager,{{"action","set_settings"},{"settings",{{"library_expanded","false"}}}}).value("ok",true),"Invalid library expansion accepted");
-        Require(Call(manager,{{"action","set_settings"},{"settings",{{"library_expanded",false}}}}).at("result").at("library_expanded")==false,"Library expansion rejected");
         auto customKeys=DefaultKeys();customKeys[0]="F";customKeys[8]="E";
         Require(Call(manager,{{"action","set_settings"},{"settings",{{"keys",customKeys},{"fast_forward_key","R"}}}}).value("ok",false),"Custom keys rejected");
         Require(Call(manager,{{"action","set_volume"},{"value",.45}}).value("ok",false),"Custom volume rejected");
-        for (const auto *view : {"grid", "details", "compact"})
-            Require(Call(manager,{{"action","set_settings"},{"settings",{{"library_view",view}}}}).at("result").at("library_view")==view,"Library view rejected");
-        for (const Json &view : {Json("invalid"),Json(1),Json(nullptr)})
-            Require(!Call(manager,{{"action","set_settings"},{"settings",{{"library_view",view}}}}).value("ok",true),"Invalid library view accepted");
         Require(!Call(manager,{{"action","set_settings"},{"settings",{{"auto_download_covers","true"}}}}).value("ok",true),"Invalid cover setting accepted");
         Require(Call(manager,{{"action","set_settings"},{"settings",{{"auto_download_covers",true}}}}).at("result").at("auto_download_covers")==true,"Cover setting rejected");
-        for(const auto* preset:{"lcd3x","none","lcd-grid-v2"})
-            Require(Call(manager,{{"action","set_settings"},{"settings",{{"shader",preset}}}}).at("result").at("shader")==preset,"Shader preset rejected");
-        for(const Json& preset:{Json("unknown"),Json(1),Json(nullptr),Json::object()})
-            Require(!Call(manager,{{"action","set_settings"},{"settings",{{"shader",preset}}}}).value("ok",true),"Invalid shader accepted");
         Require(Call(manager,{{"action","set_settings"},{"settings",{{"rom_directory",customROM.u8string()}}}}).value("ok",false),"ROM folder setting rejected");
         Require(!Call(manager,{{"action","set_settings"},{"settings",{{"rom_directory",""}}}}).value("ok",true),"Empty ROM folder accepted");
         std::ofstream(customROM/"broken.gba",std::ios::binary).put('\0');
@@ -111,21 +83,12 @@ static void SelfTest() {
         const auto settings=Call(manager,{{"action","get_settings"}}).at("result");
         Require(fs::u8path(settings.at("rom_directory").get<std::string>())==customROM,"ROM folder did not survive restart");
         Require(fs::u8path(settings.at("last_rom_directory").get<std::string>())==customROM,"Last opened ROM folder did not survive restart");
-        Require(settings.at("shader")=="lcd-grid-v2","Shader did not survive restart");
-        Require(settings.at("library_view")=="compact","Library view did not survive restart");
-        Require(settings.at("language")=="pt-BR","Language did not survive restart");
-        Require(settings.at("library_expanded")==false,"Collapsed library did not survive restart");
         Require(settings.at("keys")[0]=="F" && settings.at("keys")[8]=="E" && settings.at("fast_forward_key")=="R","Custom keys did not survive restart");
         Require(std::abs(manager.volume.load()-.45f)<.0001f,"Custom volume did not survive restart");
-        Require(Call(manager,{{"action","set_settings"},{"settings",{{"library_expanded",true}}}}).value("ok",false),"Expanded library rejected");
         Require(settings.at("auto_download_covers")==true,"Cover setting did not survive restart");
     }
-    {
-        EmulatorManager manager(defaultROM,settingsRoot/"ReaGBA");
-        Require(Call(manager,{{"action","get_settings"}}).at("result").at("library_expanded")==true,"Expanded library did not survive restart");
-    }
     fs::remove_all(settingsRoot);
-    std::cout << "PASS: SHA-256, bounded audio ring, concurrent triple buffer, persisted ROM folders and shaders\n";
+    std::cout << "PASS: SHA-256, bounded audio ring, concurrent triple buffer, persisted ROM folders, input and audio settings\n";
 }
 static Json Call(EmulatorManager &manager, Json cmd) {
     std::promise<Json> promise;
@@ -238,13 +201,6 @@ static int Verify(const fs::path &path, const fs::path &output, int totalFrames)
     }
     Require(rejected, "Corrupt state accepted");
     EmulatorManager manager(path.parent_path(), output / "manager-data");
-    const Json splitSettings = {{"library_split", 0.72}};
-    Require(Call(manager, {{"action", "set_settings"}, {"settings", splitSettings}}).value("ok", false),
-            "Library split settings accepted");
-    for (const auto &value : Json::array({-0.1, 1.1, "invalid", true, Json::array()}))
-        Require(!Call(manager, {{"action", "set_settings"},
-                                {"settings", {{"library_split", value}}}}).value("ok", true),
-                "Invalid library split accepted");
     auto load = Call(manager, {{"action", "load_rom"}, {"path", path.u8string()}});
     Require(load.value("ok", false), "Manager load failed");
     Require(Call(manager, {{"action", "pause"}}).value("ok", false), "Manager pause failed");
@@ -268,15 +224,6 @@ static int Verify(const fs::path &path, const fs::path &output, int totalFrames)
     Require(Call(manager, {{"action", "load_state"}, {"slot", 1}}).value("ok", false), "Manager load state");
     Require(Call(manager, {{"action", "stop"}}).value("ok", false), "Manager stop");
     manager.Shutdown();
-    {
-        auto reopenedManager = std::make_unique<EmulatorManager>(path.parent_path(), output / "manager-data");
-        auto restored = Call(*reopenedManager, {{"action", "get_settings"}}).at("result");
-        for (const auto *key : {"library_split"})
-            Require(restored.at(key) == splitSettings.at(key), "Library split did not survive restart");
-        Require(Call(*reopenedManager, {{"action", "set_settings"},
-                                       {"settings", {{"library_split", nullptr}}}}).value("ok", false),
-                "Automatic library size reset failed");
-    }
     std::vector<uint8_t> wav(44 + audio.size() * 2);
     auto put = [&](int p, uint32_t v, int bytes) {
         for (int i = 0; i < bytes; ++i)
@@ -314,7 +261,6 @@ static int Verify(const fs::path &path, const fs::path &output, int totalFrames)
                    {"wrong_rom_state_rejected", true},
                    {"corrupted_state_rejected", true},
                    {"manager_commands_passed", true},
-                   {"library_split_settings_persisted", true},
                    {"screenshots", checkpoints}};
     WriteJSON(output / "report.json", report);
     std::cout << report.dump(2) << '\n';

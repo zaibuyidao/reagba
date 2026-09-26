@@ -1,63 +1,55 @@
-# 原生 REAPER 扩展架构
+# 架构与接口
 
-ReaGBA 仅集成 mGBA 的 GBA 核心，关闭 GB/GBC。REAPER 动态加载扩展时注册 `_REAGBA_SHOW`；执行命令创建一个 Session，再次执行激活同一窗口。卸载注销命令钩子和计时器并释放 Session。
+## 职责
 
-```mermaid
-flowchart TD
-    Action[REAPER 操作 _REAGBA_SHOW] --> Plugin[Plugin / Session]
-    UI[系统 WebView 本地界面] -->|低频 JSON| Queue[REAPER 主线程请求队列]
-    Queue --> Manager[EmulatorManager 模拟线程]
-    Manager --> Core[mGBA GBA 核心]
-    Core --> Frames[RGBA 三缓冲]
-    Core --> PCM[PCM 环形缓冲]
-    PCM --> Audio[SDL 设备回调]
-    Frames --> GPU[原生 GPU 视图]
-    Input[原生键盘 / SDL 手柄] --> Manager
-    Manager --> Save[ROM 元数据 / 配置 / 存档]
-    Manager -->|非阻塞 get_cover| Covers[独立封面 IO 线程]
-    Covers --> Cache[封面 PNG / 编号索引缓存]
-    Covers -->|用户开启后 HTTPS| Libretro[Libretro 公开数据源]
-    Manager -->|异步结果与状态快照| UI
+```text
+ui/Open.lua → ReaWebAPI WebView
+  ├─ reaper.host.service("reagba") → Native control / atomic input → mGBA
+  └─ reaper.stream.open("reagba.video") ← independent binary transport ← emulator thread
 ```
 
-## 宿主和进程
+ReaGBA 不链接任何浏览器 SDK，不创建窗口，不注册 command_id、gaccel、hookcommand 或 hwnd_info。扩展的 timer 负责服务延迟注册、游戏手柄轮询、输入超时和控制回复缓存过期。`src/bridge/CoreCommands` 是独立于 UI 的核心命令分发器。
 
-- Windows：扩展直接管理 WebView2 Controller 与 D3D11 子窗口；使用 REAPER 的事件循环。没有独立模拟器 EXE、Lua gfx 宿主或跨进程窗口嫁接。
-- macOS：SWELL 创建 REAPER 可停靠容器，WKWebView 与 NSOpenGLView 是其原生子视图。SDK 的 SWELL 函数通过 REAPER 动态提供。
-- Linux：扩展只使用 REAPER 的 SWELL/GDK API，不链接 GTK。独立 GTK3/WebKitGTK 辅助进程提供本地界面和 GtkGLArea，以 X11 窗口嵌入容器。控制通信为继承的 socketpair；帧通过继承的 memfd 共享。辅助进程没有 mGBA 或存档代码，不使用监听端口。
+ReaWebAPI 直接加载普通 HTML 目录并注入 `window.reaper`，不复制 runtime/reaper.js、不修改 ReaWebAPI 的基础运行架构。原生各平台 WebView 宿主由 ReaWebAPI 维护。旧 ReaGBA Windows/macOS/Linux 宿主和 Linux UI 辅助进程已删除。
 
-Linux 的共享帧使用进程共享的 robust mutex，生产者和消费者均 try-lock。渲染端持锁崩溃时恢复锁并丢弃该次帧，不阻塞 REAPER。父进程退出时关闭 socket、结束自己的辅助进程并释放共享内存。
+## 核心 ReaScript API
 
-## 线程与生命周期
+所有入口从 REAPER 主线程调用。错误返回 false / 0 / 空串，并由 `ReaGBA_GetLastError()` 提供说明。
 
-REAPER 主线程持有容器、UI 请求队列与 WebView。消息回调只入队，低频 REAPER timer 每轮最多处理 32 个请求；Windows 原生窗口 timer、macOS NSTimer 或 Linux GTK timer 负责约 60 Hz 显示。
+| API | 返回与用途 |
+| --- | --- |
+| `ReaGBA_Create(dataDirectory)` | 正整数会话 ID；空目录使用原有 ReaGBA 数据目录。一次只允许一个核心，避免同时写同一存档 |
+| `ReaGBA_Destroy(id)` | 停止工作线程、完成电池存档、释放音频和手柄 |
+| `ReaGBA_Request(id, json)` | 接收不超过 64 KiB 的 `{action, id, ...}` 异步命令 |
+| `ReaGBA_Poll(id)` | 非阻塞读取 `{type:"reply",id,action,ok,result/error}`；空串表示暂无回复 |
+| `ReaGBA_ReadFrame(id, force)` | 读取最新 240×160 图像的 base64 JSON（RGBA 或无损 RLE）；无新帧时为空，force 可重取最后画面 |
+| `ReaGBA_SetInput(id, mask, fastForward, active)` | mask 位序为 A/B/Select/Start/Right/Left/Up/Down/R/L；750 ms 未刷新即停止输入 |
+| `ReaGBA_GetLastError()` | 上一次同步 API 调用的错误文本 |
 
-模拟线程独占 mGBA，执行 ROM 加载、每帧模拟与存读档。状态返回主线程再发送到 WebView，像素和 PCM 从不进入 JSON 或 JavaScript。主线程与模拟线程间用三缓冲交换最新画面；音频回调从 SPSC 环形缓冲读取，不操作核心、不分配或加锁。
+控制命令包括加载 ROM、开始/暂停/重置/停止、九槽存读档、电池存档、截图、音量、倍率、跳帧、状态、ROM 扫描、封面、收藏和核心配置。`game_viewport`、`toggle_dock`、`open_rom` 等 UI 命令不属于核心接口。
 
-关闭时停止宿主 timer 和输入，撤销 WebView 回调，join 模拟线程完成电池存档，再关闭 SDL 音频并释放 Manager。仅退出本 Session 初始化的 SDL 子系统，不对 REAPER 调用 SDL_Quit。Linux 的静态库符号隐藏，避免覆盖宿主或其他扩展的符号。
+CoreCommands 保持原有核心命令结构；回复 ID 由适配层补回。已接收而未取回的请求最多 128 个，结果最多 8 MiB。超限明确返回错误，不静默丢失回复。会话 ID 单调增长，过期 Lua 回调不能操作重开的核心。
 
-## 停靠、输入和布局
+## Native Service 与界面
 
-`DockWindowAddEx / DockWindowRemove / DockWindowActivate` 在同一个容器上切换 Docker 与浮动窗口，不重建核心。浮动窗口位置、尺寸、停靠状态和 Docker 编号保存到 `config/window.json`；Windows 也保存最大化状态，最小化时读取正常窗口位置。窗口变化停止 500 ms 后保存，切换停靠及关闭时立即保存。停靠窗口不覆盖浮动尺寸。ROM 和进度独立于 REAPER 工程。
+`ui/Open.lua` 只打开或激活窗口后返回。界面和接入代码属于 ReaGBA 仓库，ReaWebAPI 提供通用窗口、服务与流能力。
 
-键盘处理在原生层完成：Windows VK/scancode + WebView2 AcceleratorKeyPressed；macOS NSEvent 物理 scancode；Linux GTK 按键事件通过本地 IPC 送到扩展。只接受 ReaGBA 焦点内的输入，搜索和设置时屏蔽游戏键；短按保留到下次轮询，失焦清空。默认 L 加速用独立标志，松开恢复原倍率；肩键 R/L 默认为 Q/O。页面从当前键位设置生成启动提示，包括自定义方向、肩键和加速键。
+`reagba` 服务支持 `loadRom`、`closeRom`、`pause`、`resume`、`reset`、`saveState`、`loadState`、`getState`、`setSpeed`、`settings`，也接受原有 CoreCommands 的 action 名称。普通命令异步执行。大型封面或游戏库结果通过有界分块读取，保留原有 8 MiB 结果上限。每片最多 128 KiB，缓存最多四项和 16 MiB，绑定请求窗口，60 秒后过期。帧流不使用此控制回复通道。
 
-页面保持上下布局。DOM 计算 3:2 游戏区、库列表高度与裁剪矩形，宿主将矩形转换为实际像素。Windows 用窗口区域留出 D3D 视图，macOS/Linux 将原生 GL 视图放在对应位置。只传递矩形，不传像素。分隔条比例通过 `library_split` 保存，展开状态通过 `library_expanded` 保存；未手动选择展开状态时才按窗口空间自动决定。窄高窗口的剩余空间用于列表，画面不会被拉成长黑框。
+`service.send('input', {mask, fast, active})` 在主线程直接更新原子输入状态，不排入 ROM/存档命令队列。失焦或清理页面时释放输入，活跃页面每 200 ms 刷新输入有效期。750 ms 无刷新时自动释放。
 
-## 本地界面和持久化
+`reagba.video` 为 240×160、RGBA8、960-byte stride 的 Frame Stream。模拟线程发布完整二进制帧，使用三槽有界缓冲。页面卡顿时保留最新帧，WebGL 直接接收 Uint8Array。消费者关闭只解除自己的连接，生产者关闭时通知所有页面。重开窗口可以读取暂停前的最后一帧。
 
-`ui/i18n.js` 管理全部界面语言，首启默认英文。界面通过 `set_settings` 保存 `language`，原生层校验标识格式但不枚举语言，后续增加语言无需重编译扩展。缺失译文回退英文；文件选择器通过请求的 `dialog_title` 获取本地化标题。详见 [多语言维护](LOCALIZATION.md)。
+界面保留原有布局、语言和控制。显示偏好使用 `config/ui.json`，核心维护模拟、ROM、封面和存档配置。对话框、停靠和聚焦复用 ReaWebAPI。
 
-`prepare_ui.py` 校验并原样复制 `index.html`、`style.css`、`i18n.js`、`app.js`；这四份 UI 源文件可以直接放入安装目录的 `web` 使用，不依赖网络服务或内联构建步骤。扩展会确认四份文件齐全，并只从 REAPER 资源目录 `Scripts/zaibuyidao Scripts/ReaGBA/web` 加载界面。宿主拒绝外部导航、新窗口和 WebView 权限请求。控制队列有数量和字节上限，协议使用请求 ID 匹配异步结果。
+ReaWebAPI 或 ReaGBA 卸载时，服务关闭回调先停止并等待模拟线程，再关闭流和释放会话。ReaGBA 主动卸载时随后注销服务。旧 ReaScript 调用不要求安装 ReaWebAPI。
 
-ROM 保持只读。`RuntimePaths` 把全部数据固定到资源目录 `Scripts/zaibuyidao Scripts/ReaGBA`，不兼容旧数据地址。ROM 游戏文件夹和最后一次文件选择位置保存在 `config/preferences.json`。存档按 ROM SHA-256 区分，包含核心版本和完整性检查。写入先完成临时文件，再替换目标文件。测试通过显式环境变量隔离数据，诊断输出不会进入发布包。
+## 画面、音频与持久化
 
-`CoverManager` 在独立线程读写 `cache/covers` 并下载封面，模拟线程的 `get_cover` 只排队或取回结果；图片每次单独通过 PNG data URI 发送，游戏帧仍不进入界面脚本。待处理结果上限 32，读取后释放图片内存。Windows 使用系统 WinHTTP，macOS 使用系统 libcurl，Linux 使用发行版 libcurl；HTTPS 证书验证保持开启，固定请求 `raw.githubusercontent.com`，不跟随重定向。索引最多 8 MiB、PNG 最多 1 MiB，图片尺寸上限 2048×2048，连接/读取及总耗时受限；下载中关闭开关会取消后续请求。WebView 的 CSP 仍禁止联网。
+mGBA 在工作线程独占运行，像素发布至原生流并保留旧核心 API 的三缓冲，PCM 通过原有 SPSC 缓冲交给 SDL 音频回调。读取画面不阻塞模拟线程，截图仍是未经 Shader 处理的核心 BMP。
 
-ROM 四位编号在本地匹配 Libretro no-intro DAT 的 serial/name，按上游文件命名规则编码 Named_Boxarts 路径。不存在条目或图片时回退字母；不会用模糊文件名匹配其他游戏。正向缓存长期保留，索引 30 天更新，未匹配与网络错误分别退避 7 天、10 分钟。`auto_download_covers` 默认为 false，`library_view` 默认为 details，可选 grid/compact；两者校验后写入 preferences.json。
+WebView 使用 WebGL2 显示、整数缩放及原有 LCD 效果公式。参考公式与原生 D3D 数学验证只保留于 `tests/reference/video`，不链接进扩展。没有 WebGL2 时使用 Canvas 2D 与相同的 CPU Shader 公式回退显示，性能取决于窗口大小和设备。
 
-## 目录
+模拟与音频保持约 59.73 Hz 的核心时钟。帧传输不依赖 Lua defer、普通服务 RPC 或 Runtime::tick()。vsync 控制是否通过 requestAnimationFrame 提交；浏览器仍负责最终合成与节流。
 
-`src/extension` 是扩展和各平台宿主；`src/reaper` 是最小 REAPER API 绑定；`src/core` 是 mGBA 适配器；`src/app` 管理模拟线程；`src/bridge` 处理控制命令；`src/video`、`audio`、`input`、`save`、`rom` 分别负责相应原生模块。
-
-构建默认只生成扩展及开发验证程序。CMake 安装组件 ReaGBA 和发布脚本均明确选择分发文件，禁止将整个构建目录直接打包。
+核心数据目录保持不变，避免移动存档；`config/ui.json` 由前端通过 ReaWebAPI 文件服务保存。窗口位置、停靠及 WebView profile 使用 ReaWebAPI 的持久化机制，不再访问旧 `window.json`。

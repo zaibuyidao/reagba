@@ -1,6 +1,5 @@
 #include "input/InputManager.h"
 #include "input/KeyBindings.h"
-#include "platform/Windows/Keyboard.h"
 #include "core/gba/GBACore.h"
 #include "save/SaveManager.h"
 #include <iostream>
@@ -16,8 +15,6 @@ int wmain(int argc, wchar_t **argv) {
             Json config = Json::object();
             NormalizeKeys(config);
             input.Configure(config);
-            const int vks[] = {'J','K',VK_SPACE,VK_RETURN,'D','A','W','S','Q','O','L'};
-            for (size_t i=0; i<11; ++i) require(VirtualKey(input.Mapping()[i]) == vks[i], "native key translation");
             for (int i=0; i<10; ++i) {
                 auto key=input.Mapping()[i];
                 input.Key(key,true);

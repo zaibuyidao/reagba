@@ -1,7 +1,7 @@
 // Catalog integrity and fallback checks do not require a browser or native host.
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
 const root=path.resolve(__dirname,'..'),window={};
-vm.runInNewContext(fs.readFileSync(path.join(root,'ui/i18n.js'),'utf8'),{window,Intl});
+vm.runInNewContext(fs.readFileSync(require('./ui_path.cjs')('i18n.js'),'utf8'),{window,Intl});
 const i18n=window.ReaGBAI18n,base=i18n.catalogs.en.messages;
 const tokens=s=>[...s.matchAll(/\{(\w+)\}/g)].map(m=>m[1]).sort();
 assert.deepEqual(Object.keys(i18n.catalogs),['en','zh-CN','zh-TW','ja','ko','es','de','fr']);
@@ -23,9 +23,9 @@ i18n.catalogs.it={name:'Italiano',messages:{settings:'Impostazioni'}};
 i18n.set('it');assert.equal(i18n.t('settings'),'Impostazioni');assert.equal(i18n.t('save'),base.save);
 assert.equal(i18n.t('coverAlt',{title:'<img onerror=alert(1)>'}),'Cover for <img onerror=alert(1)>');
 i18n.set('de');assert.equal(i18n.number(12.5),'12,5');
-const html=fs.readFileSync(path.join(root,'ui/index.html'),'utf8');
+const html=fs.readFileSync(require('./ui_path.cjs')('index.html'),'utf8');
 for(const match of html.matchAll(/data-i18n(?:-title|-aria-label|-placeholder)?="([^"]+)"/g))assert.ok(Object.hasOwn(base,match[1]),'Unknown DOM key: '+match[1]);
-const app=fs.readFileSync(path.join(root,'ui/app.js'),'utf8');
+const app=fs.readFileSync(require('./ui_path.cjs')('app.js'),'utf8');
 for(const match of app.matchAll(/\bt\('([^']+)'/g))assert.ok(Object.hasOwn(base,match[1]),'Unknown JS key: '+match[1]);
 assert.ok(!/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Hangul}]/u.test(app),'Keep translations in the catalog');
 console.log(`PASS: ${Object.keys(base).length} messages in 8 languages, placeholders, fallback, formatting and UI keys`);

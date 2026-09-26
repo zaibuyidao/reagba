@@ -13,8 +13,8 @@ PLATFORMS={
     'windows-x64':('reaper_reagba-x64.dll',None),
     'macos-x86_64':('reaper_reagba-x86_64.dylib',None),
     'macos-arm64':('reaper_reagba-arm64.dylib',None),
-    'linux-x86_64':('reaper_reagba-x86_64.so','reagba-webview-x86_64'),
-    'linux-aarch64':('reaper_reagba-aarch64.so','reagba-webview-aarch64'),
+    'linux-x86_64':('reaper_reagba-x86_64.so',None),
+    'linux-aarch64':('reaper_reagba-aarch64.so',None),
 }
 
 def version():
@@ -29,7 +29,7 @@ def asset_name(platform,release_version=None):
 def package_files(platform):
     import reapack
     binary,helper=PLATFORMS[platform]
-    files=[Path('UserPlugins')/binary]+[PRODUCT/'web'/name for name in reapack.web_files()]
+    files=[Path('UserPlugins')/binary]
     if helper:files.append(PRODUCT/'extension'/helper)
     return files
 
@@ -55,21 +55,17 @@ def collect(stage,output,platform):
         # Common assets must be identical across Windows and Unix packages.
         if path.suffix in ('.html','.css','.js'):data=data.replace(b'\r\n',b'\n')
         files[relative.as_posix()]=data
-    ui={name:files[(PRODUCT/'web'/name).as_posix()].decode('utf-8') for name in reapack.web_files()}
-    if any(marker in text for text in ui.values() for marker in ('/* REAGBA_STYLE */','/* REAGBA_SCRIPT */','@REAGBA_VERSION@')):raise ValueError('UI must be directly runnable before packaging')
-    html=ui['index.html']
-    if 'href="style.css"' not in html or 'src="app.js"' not in html or 'src="i18n.js"' not in html:raise ValueError('UI entry must load style.css, i18n.js and app.js')
-    metadata={'version':version(),'platform':platform,'action':'_REAGBA_SHOW','action_name':'zaibuyidao: ReaGBA',
+    metadata={'version':version(),'platform':platform,'role':'gba-core',
               'files':{name:hashlib.sha256(data).hexdigest() for name,data in files.items()}}
-    files[(PRODUCT/'web/manifest.json').as_posix()]=json.dumps(metadata,indent=2).encode('utf-8')
+    files['ReaGBA-core.json']=json.dumps(metadata,indent=2).encode('utf-8')
     target=output/asset_name(platform);write_zip(target,files)
     return target
 
 def read_package(source,platform):
     with zipfile.ZipFile(source) as archive:
-        metadata_name=(PRODUCT/'web/manifest.json').as_posix()
+        metadata_name='ReaGBA-core.json'
         metadata=json.loads(archive.read(metadata_name));allowed={p.as_posix() for p in package_files(platform)}
-        if metadata['version']!=version() or metadata['platform']!=platform or metadata.get('action')!='_REAGBA_SHOW' or metadata.get('action_name')!='zaibuyidao: ReaGBA':raise ValueError('Mixed platform or version packages')
+        if metadata['version']!=version() or metadata['platform']!=platform or metadata.get('role')!='gba-core':raise ValueError('Mixed platform or version packages')
         names=archive.namelist()
         if set(metadata['files'])!=allowed or set(names)!=allowed|{metadata_name} or len(names)!=len(set(names)):raise ValueError('Unexpected or missing files in package')
         files={name:archive.read(name) for name in allowed}
@@ -100,7 +96,7 @@ def aggregate(artifacts,output,tag):
     (output/'SHA256SUMS.txt').write_text(''.join(f'{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.name}\n' for p in sorted(paths)),encoding='utf-8')
 
 def prepare_publisher(stage,output,platform):
-    """Stage available local binaries/web assets; CI aggregate requires all platforms."""
+    """Stage available local core binaries; CI aggregate requires all platforms."""
     import reapack
     files={}
     for relative in package_files(platform):

@@ -2,7 +2,7 @@
 #include <string>
 
 namespace reagba::shaders {
-// One math implementation for D3D11 and OpenGL. No runtime shader files or web assets.
+// Frozen pre-migration render reference. Used by tests only; never linked into the core extension.
 // LCD3x: Gigaherz's public-domain sine mask, default scanline/LCD brightness 16/4.
 // https://github.com/libretro/glsl-shaders/blob/master/handheld/shaders/lcd3x.glsl
 // LCD grid v2: implementation of cgwg's integrated subpixel profile model, at

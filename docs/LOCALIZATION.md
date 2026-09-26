@@ -21,13 +21,11 @@ ReaGBA 首次启动固定使用英文，不读取系统或浏览器语言。设�
 
 ## 保存和兼容性
 
-语言通过现有 `get_settings` / `set_settings` 协议读写，字段为 `language`，存入 REAPER 资源目录下的 `Scripts/zaibuyidao Scripts/ReaGBA/config/preferences.json`。不依赖浏览器本地存储，Linux 的 WebView 禁用 localStorage 也可以记住设置。
+页面继续使用 `get_settings` / `set_settings` 调用方式，迁移适配器把 `language` 等显示偏好通过 ReaWebAPI 文件服务写入 `Scripts/zaibuyidao Scripts/ReaGBA/config/ui.json`。首次运行读取旧核心配置中的显示字段；核心不再校验或保存新语言配置。新增语言无需编译核心。
 
-本次首次加入多语言需要更新原生扩展：旧扩展的设置白名单会丢弃 `language`。新扩展只校验语言标识的长度和字符，不限定语言列表，之后添加语言不需要重新编译扩展。界面会检查保存结果；写入失败或旧扩展忽略字段时会回退到此前的语言并提示错误。
+`open_rom` 和 `select_rom_directory` 由 ReaWebAPI 文件对话框实现，请求保留当前语言的 `dialog_title`。系统文字由操作系统 / REAPER 决定。核心错误仍由页面翻译；未识别的错误保留原始信息。
 
-`open_rom` 和 `select_rom_directory` 请求可附带当前语言的 `dialog_title`；原生端保留英文默认值以兼容旧界面。系统文件选择器的按钮和其他系统文字由操作系统 / REAPER 决定。常见 ROM、BIOS、存档错误在界面中本地化，未识别的底层错误保留原始诊断信息；界面加载之前的原生启动错误仍使用英文。
-
-分发时四个文件必须齐全：`index.html`、`style.css`、`i18n.js`、`app.js`。`prepare_ui.py`、CMake 安装规则和 ReaPack 清单均包含语言资源，不需要联网或构建前端资源。
+四个 Web 文件与 `Open.lua` 一起放在本仓库的 `ui/` 中，无需前端构建或修改核心包。
 
 ## 验证
 
@@ -40,6 +38,4 @@ node tests/layout_verify.cjs
 ctest --test-dir build/native -C Release --output-on-failure
 ```
 
-浏览器测试需要 Playwright 和 Chromium；可用 `REAGBA_NODE_MODULES` 指定依赖位置，`REAGBA_BROWSER_CHANNEL=msedge` 使用本机 Edge。多语言测试禁用 localStorage，使用独立模拟原生桥验证保存、重新打开、失败回退、未知语言回退、文件选择器标题、错误提示和六种窗口尺寸；不会操作用户的 REAPER 配置。原生测试实际写入临时配置并重建 EmulatorManager，验证默认英文和语言设置持久化。
-
-Windows 本地测试安装包位于 `build/i18n-update`，沿用当前开发版本号，未发布。正式发布前由维护者递增版本号，完成五平台构建，并在 REAPER 实机测试。不要将旧 macOS/Linux 扩展与新界面组合成正式发布包。
+浏览器测试需要 Playwright 和 Chromium；可用 `REAGBA_NODE_MODULES` 指定依赖位置，`REAGBA_BROWSER_CHANNEL=msedge` 使用本机 Edge。多语言测试禁用 localStorage，使用独立模拟原生桥验证保存、重新打开、失败回退、未知语言回退、文件选择器标题、错误提示和六种窗口尺寸；不会操作用户的 REAPER 配置。真实 Lua/Core/ReaWebAPI 持久化回归见 `tests/reawebapi_smoke.py`。

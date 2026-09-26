@@ -11,95 +11,49 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]/'scripts'))
 import release
 import reapack
 import github_release
-import prepare_ui
 
 class Packages(unittest.TestCase):
     def stage(self, root, platform):
         for relative in release.package_files(platform):
-            path=root/relative;path.parent.mkdir(parents=True, exist_ok=True);path.write_bytes(b'fixture')
-        prepare_ui.assemble(release.ROOT/'ui',root/release.PRODUCT/'web',release.version())
-        for relative in ('ROM/game.gba','data/states/user.state','runtime/ReaGBA.exe','ReaGBA.lua'):
-            path=root/release.PRODUCT/relative;path.parent.mkdir(parents=True, exist_ok=True);path.write_bytes(b'private')
+            path=root/relative;path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(b'fixture')
+        for relative in ('ui/index.html','Scripts/Open.lua','ROM/private.gba','reagba-webview-x86_64'):
+            path=root/relative;path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(b'excluded')
 
-    def test_platforms_and_private_data_exclusion(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root=Path(tmp);artifacts=root/'artifacts'
-            for platform, (_, helper) in release.PLATFORMS.items():
-                stage=root/platform;self.stage(stage,platform)
-                target=release.collect(stage,artifacts,platform)
-                with zipfile.ZipFile(target) as archive:
-                    self.assertFalse(any('/ROM/' in p or '/data/' in p or p.endswith(('.exe','.lua')) for p in archive.namelist()))
-                    metadata=json.loads(archive.read((release.PRODUCT/'web/manifest.json').as_posix()))
-                    self.assertEqual(metadata['action'],'_REAGBA_SHOW')
-                    self.assertEqual(metadata['action_name'],'zaibuyidao: ReaGBA')
-                    if helper:self.assertTrue((archive.getinfo((release.PRODUCT/'extension'/helper).as_posix()).external_attr>>16)&0o100)
-            release.aggregate(artifacts,root/'dist','v'+release.version())
-            lines=(root/'dist/SHA256SUMS.txt').read_text().splitlines();self.assertEqual(len(lines),13)
-            for line in lines:
-                checksum,name=line.split('  ');self.assertEqual(checksum,hashlib.sha256((root/'dist'/name).read_bytes()).hexdigest())
-            self.assertEqual({p.name for p in (root/'dist').iterdir()},set(github_release.asset_names(release.version())))
-            with zipfile.ZipFile(root/'dist'/reapack.bundle_name()) as archive:
-                expected={'ReaGBA/ReaGBA.ext'}|{'ReaGBA/web/'+name for name in reapack.web_files()}
-                expected|={'ReaGBA/extension/'+name for pair in release.PLATFORMS.values() for name in pair if name}
-                self.assertEqual(set(archive.namelist()),expected)
-                self.assertEqual(len(expected),12)
-                self.assertEqual(reapack.web_files(),['app.js','i18n.js','index.html','style.css'])
-                self.assertEqual(archive.read('ReaGBA/ReaGBA.ext').decode(),reapack.manifest())
-                for name in expected:
-                    if release.executable(name):self.assertTrue((archive.getinfo(name).external_attr>>16)&0o100)
-            with self.assertRaises(ValueError):release.aggregate(artifacts,root/'dist','v99.0.0')
-            with zipfile.ZipFile(artifacts/release.asset_name('windows-x64'),'a') as archive:archive.writestr('ROM/private.gba',b'bad')
-            with self.assertRaises(ValueError):release.aggregate(artifacts,root/'dist','v'+release.version())
-
-    def test_missing_files_and_non_runnable_ui(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root=Path(tmp);self.stage(root/'stage','windows-x64')
-            html=root/'stage'/release.PRODUCT/'web/index.html';html.write_text('/* REAGBA_SCRIPT */')
-            with self.assertRaises(ValueError):release.collect(root/'stage',root/'out','windows-x64')
-            html.unlink()
-            with self.assertRaises(ValueError):release.collect(root/'stage',root/'out','windows-x64')
-            with self.assertRaises(ValueError):release.aggregate(root/'empty',root/'out','v'+release.version())
-
-    def test_installed_ui_matches_the_four_sources(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            output=Path(tmp)/'web';prepare_ui.assemble(release.ROOT/'ui',output,release.version())
-            self.assertEqual({p.name for p in output.iterdir()},{'app.js','i18n.js','index.html','style.css'})
-            for name in reapack.web_files():
-                self.assertEqual((output/name).read_bytes(),(release.ROOT/'ui'/name).read_bytes())
-            html=(output/'index.html').read_text(encoding='utf-8')
-            self.assertIn('href="style.css"',html);self.assertIn('src="app.js"',html);self.assertIn('src="i18n.js"',html)
-
-    def test_common_web_assets_must_match(self):
+    def test_core_only_packages(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)
-            source=(release.ROOT/'ui/index.html').read_text(encoding='utf-8')
-            for platform in release.PLATFORMS:
+            for platform,(binary,helper) in release.PLATFORMS.items():
+                self.assertIsNone(helper)
                 stage=root/platform;self.stage(stage,platform)
-                # Git checkouts can have different line endings on Windows.
-                newline='\r\n' if platform=='windows-x64' else '\n'
-                (stage/release.PRODUCT/'web/index.html').write_text(source,encoding='utf-8',newline=newline)
-                release.collect(stage,root/'artifacts',platform)
-            release.aggregate(root/'artifacts',root/'out','v'+release.version())
-            stage=root/'windows-x64'
-            (stage/release.PRODUCT/'web/index.html').write_text(source.replace('<title>ReaGBA</title>','<title>Incompatible UI</title>'),encoding='utf-8')
-            release.collect(stage,root/'artifacts','windows-x64')
-            with self.assertRaisesRegex(ValueError,'different web assets'):
-                release.aggregate(root/'artifacts',root/'bad','v'+release.version())
-            self.assertFalse((root/'bad').exists())
+                target=release.collect(stage,root/'artifacts',platform)
+                with zipfile.ZipFile(target) as archive:
+                    self.assertEqual(set(archive.namelist()),{'UserPlugins/'+binary,'ReaGBA-core.json'})
+                    self.assertEqual(json.loads(archive.read('ReaGBA-core.json'))['role'],'gba-core')
+            release.aggregate(root/'artifacts',root/'dist','v'+release.version())
+            self.assertEqual({p.name for p in (root/'dist').iterdir()},set(github_release.asset_names(release.version())))
+            with zipfile.ZipFile(root/'dist'/reapack.bundle_name()) as archive:
+                expected={'ReaGBA/ReaGBA.ext'}|{'ReaGBA/extension/'+pair[0] for pair in release.PLATFORMS.values()}
+                self.assertEqual(set(archive.namelist()),expected)
+            for line in (root/'dist/SHA256SUMS.txt').read_text().splitlines():
+                digest,name=line.split('  ');self.assertEqual(digest,hashlib.sha256((root/'dist'/name).read_bytes()).hexdigest())
+            with self.assertRaises(ValueError):release.aggregate(root/'artifacts',root/'bad','v99.0.0')
+            with zipfile.ZipFile(root/'artifacts'/release.asset_name('windows-x64'),'a') as archive:archive.writestr('ui/private.html',b'bad')
+            with self.assertRaises(ValueError):release.aggregate(root/'artifacts',root/'bad','v'+release.version())
 
-    def test_reapack_uses_only_public_repository(self):
+    def test_missing_binary(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            with self.assertRaises(ValueError):release.collect(root,root/'out','windows-x64')
+
+    def test_reapack_only_installs_core(self):
         manifest=reapack.manifest()
         self.assertNotIn('github.com/zaibuyidao/reagba',manifest)
-        self.assertNotIn('SendFlow',manifest)
-        self.assertNotIn('.lua',manifest)
-        self.assertIn('@version '+release.version(),manifest)
-        entries=reapack.sources()
-        self.assertEqual({e['platform'] for e in entries},set(reapack.PLATFORM_IDS.values()))
-        for entry in entries:
+        self.assertNotIn('_REAGBA_SHOW',manifest)
+        self.assertEqual(len(reapack.sources()),5)
+        for entry in reapack.sources():
+            self.assertEqual(entry['type'],'extension')
+            self.assertNotIn('/',entry['file'])
             self.assertIn(reapack.BASE_URL+'/'+entry['path'],manifest)
-            if entry['type']=='extension':self.assertNotIn('/',entry['file'])
-            else:self.assertTrue(entry['file'].startswith(('web/','extension/')))
-        self.assertIn('/ReaScripts/$commit/ReaGBA',manifest)
 
 class Publication(unittest.TestCase):
     sha='a'*40

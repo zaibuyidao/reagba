@@ -3,10 +3,10 @@
 
 namespace reagba {
 struct RuntimePaths {
-    std::filesystem::path product, web, data, roms;
+    std::filesystem::path data;
 };
 inline RuntimePaths ResolveRuntimePaths(const std::filesystem::path& resources) {
     const auto product=resources/"Scripts"/"zaibuyidao Scripts"/"ReaGBA";
-    return {product,product/"web",product,product/"ROM"};
+    return {product};
 }
 }

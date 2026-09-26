@@ -1,4 +1,4 @@
-"""ReaScripts publishing layout and ReaPack metadata (no Lua launch script)."""
+"""ReaGBA core publishing; UI and its Lua launcher remain in this repository, distributed separately."""
 from pathlib import Path
 import release
 
@@ -6,18 +6,11 @@ CATEGORY='ReaGBA'
 PLATFORM_IDS={'windows-x64':'win64','macos-x86_64':'darwin64','macos-arm64':'darwin-arm64','linux-x86_64':'linux64','linux-aarch64':'linux-aarch64'}
 BASE_URL='https://raw.githubusercontent.com/zaibuyidao/ReaScripts/$commit/ReaGBA'
 
-def web_files():
-    return ['app.js','i18n.js','index.html','style.css']
-
 def sources():
     entries=[]
     for platform,(binary,helper) in release.PLATFORMS.items():
         native=PLATFORM_IDS[platform]
         entries.append(dict(platform=native,type='extension',file=binary,path='extension/'+binary))
-        if helper:
-            entries.append(dict(platform=native,type='script',file='extension/'+helper,path='extension/'+helper))
-        for name in web_files():
-            entries.append(dict(platform=native,type='script',file='web/'+name,path='web/'+name))
     return entries
 
 def manifest():
@@ -26,8 +19,8 @@ def manifest():
     for entry in sources():
         options=entry['platform']+' '+entry['type']+(' nomain' if entry['type']=='script' else '')
         lines.append('  ['+options+'] '+entry['file']+' '+BASE_URL+'/'+entry['path'])
-    lines+=['@changelog','  Native extension action: zaibuyidao: ReaGBA. No Lua launcher.',
-            '  Install the four WebView assets under ReaGBA/web.']
+    lines+=['@changelog','  Headless GBA core only; no native action or WebView host.',
+            '  Add the reagba Native Service and binary Frame Stream for ReaWebAPI v0.3.6.4+.']
     return '\n'.join(lines)+'\n'
 
 def bundle_name(version=None):
@@ -37,5 +30,4 @@ def publisher_files(platform, installed):
     binary,helper=release.PLATFORMS[platform]
     result={CATEGORY+'/extension/'+binary:installed['UserPlugins/'+binary]}
     if helper:result[CATEGORY+'/extension/'+helper]=installed[(release.PRODUCT/'extension'/helper).as_posix()]
-    for name in web_files():result[CATEGORY+'/web/'+name]=installed[(release.PRODUCT/'web'/name).as_posix()]
     return result

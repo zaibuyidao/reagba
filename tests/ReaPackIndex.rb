@@ -22,15 +22,12 @@ platforms.each do |platform|
   rows = sources.select { |s| s['platform'] == platform }
   native = rows.select { |s| s['type'] == 'extension' }
   raise 'Expected one flat UserPlugins binary per platform' unless native.size == 1 && !native[0]['file'].include?('/')
-  %w[web/app.js web/i18n.js web/index.html web/style.css].each do |file|
-    raise "Missing installed #{file}" unless rows.any? { |s| s['file'] == file && s['type'] == 'script' }
-  end
-  raise 'Missing Linux helper' if platform.start_with?('linux') && !rows.any? { |s| s['file'].start_with?('extension/reagba-webview-') && s['type'] == 'script' }
+  raise 'Core package contains UI files' unless rows.size == 1
 end
-raise 'Unexpected source count' unless sources.size == 27
+raise 'Unexpected source count' unless sources.size == 5
 sources.each do |source|
   raise 'Files must not register Lua actions' if source['main']
   raise 'Unexpected private, floating or malformed URL' unless source.text.start_with?('https://raw.githubusercontent.com/zaibuyidao/ReaScripts/' + index.commit + '/ReaGBA/')
   raise 'Descriptor must not install itself' if source['file'].end_with?('.ext', '.lua')
 end
-puts "ReaPack indexer passed: #{platforms.size} platforms, #{sources.size} sources, pinned public URLs, native action only"
+puts "ReaPack indexer passed: #{platforms.size} platforms, #{sources.size} sources, pinned public URLs, core APIs only"

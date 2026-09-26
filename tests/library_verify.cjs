@@ -40,7 +40,7 @@ const image=fs.existsSync(cached)?'data:image/png;base64,'+fs.readFileSync(cache
    };
   },{image});
   const settle=()=>page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
-  await page.goto(pathToFileURL(path.resolve(__dirname,'../ui/index.html')).href);
+  await page.goto(pathToFileURL(require('./ui_path.cjs')('index.html')).href);
   await page.waitForFunction(()=>document.getElementById('about-version').textContent==='test'&&!coversLoading);
   assert.equal(await page.locator('#auto-covers').isChecked(),false);
   await page.waitForFunction(()=>document.querySelector('.cover[data-code="BZME"]').classList.contains('has-image'));

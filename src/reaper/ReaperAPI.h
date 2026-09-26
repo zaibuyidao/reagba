@@ -1,13 +1,5 @@
 #pragma once
 #include "reaper_plugin.h"
 #define REAPERAPI_MINIMAL
-#define REAPERAPI_WANT_DockWindowAddEx
-#define REAPERAPI_WANT_DockWindowRemove
-#define REAPERAPI_WANT_DockWindowActivate
-#define REAPERAPI_WANT_DockIsChildOfDock
-#define REAPERAPI_WANT_Dock_UpdateDockID
-#define REAPERAPI_WANT_GetExtState
 #define REAPERAPI_WANT_GetResourcePath
-#define REAPERAPI_WANT_ShowMessageBox
-#define REAPERAPI_WANT_GetUserFileNameForRead
 #include "reaper_plugin_functions.h"
