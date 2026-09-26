@@ -82,7 +82,7 @@ int Create(const char* directory) {
         SDL_SetMainReady();
         if (SDL_InitSubSystem(SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER)) throw std::runtime_error(SDL_GetError());
         next->sdl = true;
-        next->manager = std::make_unique<EmulatorManager>(data / "ROM", data);
+        next->manager = std::make_unique<EmulatorManager>(data / "roms", data);
         next->audio = std::make_unique<AudioEngine>(*next->manager);
         next->input = std::make_unique<InputManager>();
         next->commands = std::make_unique<CoreCommands>(*next->manager);

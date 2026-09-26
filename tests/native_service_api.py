@@ -73,7 +73,7 @@ def call(method,data=None):
 try:
  assert entry(None,C.byref(info))==1;C.CFUNCTYPE(None)(registered['timer'])();assert service
  call('getState')
- cache=a.output/'Scripts/zaibuyidao Scripts/ReaGBA/cache/covers';cache.mkdir(parents=True,exist_ok=True)
+ cache=a.output/'Scripts/zaibuyidao Scripts/Modules/ReaGBA/cache/covers';cache.mkdir(parents=True,exist_ok=True)
  def png_chunk(kind,data):return struct.pack('>I',len(data))+kind+data+struct.pack('>I',zlib.crc32(kind+data))
  pixels=random.Random(0).randbytes(512*400*4)
  raw=b''.join(b'\0'+pixels[y*2048:(y+1)*2048] for y in range(400))

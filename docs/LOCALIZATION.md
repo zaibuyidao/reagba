@@ -4,10 +4,10 @@ ReaGBA 首次启动固定使用英文，不读取系统或浏览器语言。设�
 
 ## 资源与代码
 
-- `ui/i18n.js`：唯一的语言资源与格式化入口。`catalogs` 用 BCP 47 语言标识作为键，`name` 使用语言自己的名称，`messages` 保存全部界面文案。
-- `ui/index.html`：静态元素通过 `data-i18n` 标记；提示、无障碍名称和输入提示分别使用 `data-i18n-title`、`data-i18n-aria-label`、`data-i18n-placeholder`。HTML 中保留可直接阅读的英文初始文案。
-- `ui/app.js`：动态文案调用 `t(key, values)`，状态、游戏卡片、存档时间、错误提示和文件选择器标题随语言切换更新。排序、大小写搜索、数字和日期采用当前语言的地区规则。
-- `ui/style.css`：为较长标签提供换行空间。详细列表的游玩按钮占独立一行，避免遮住元数据；紧凑列表保留单行标题。
+- `web/i18n.js`：唯一的语言资源与格式化入口。`catalogs` 用 BCP 47 语言标识作为键，`name` 使用语言自己的名称，`messages` 保存全部界面文案。
+- `web/index.html`：静态元素通过 `data-i18n` 标记；提示、无障碍名称和输入提示分别使用 `data-i18n-title`、`data-i18n-aria-label`、`data-i18n-placeholder`。HTML 中保留可直接阅读的英文初始文案。
+- `web/app.js`：动态文案调用 `t(key, values)`，状态、游戏卡片、存档时间、错误提示和文件选择器标题随语言切换更新。排序、大小写搜索、数字和日期采用当前语言的地区规则。
+- `web/style.css`：为较长标签提供换行空间。详细列表的游玩按钮占独立一行，避免遮住元数据；紧凑列表保留单行标题。
 
 翻译只作为纯文本写入 DOM，不使用 `innerHTML`。游戏标题、路径、ROM 内容和 BIOS 不会被翻译。GBA 的 A/B、L/R、Start/Select 标签、着色器预设名称和引擎键名保持不变。
 
@@ -21,11 +21,11 @@ ReaGBA 首次启动固定使用英文，不读取系统或浏览器语言。设�
 
 ## 保存和兼容性
 
-页面继续使用 `get_settings` / `set_settings` 调用方式，迁移适配器把 `language` 等显示偏好通过 ReaWebAPI 文件服务写入 `Scripts/zaibuyidao Scripts/ReaGBA/config/ui.json`。首次运行读取旧核心配置中的显示字段；核心不再校验或保存新语言配置。新增语言无需编译核心。
+页面继续使用 `get_settings` / `set_settings` 调用方式，迁移适配器把 `language` 等显示偏好通过 ReaWebAPI 文件服务写入 `Scripts/zaibuyidao Scripts/Modules/ReaGBA/config/ui.json`。首次运行读取旧核心配置中的显示字段；核心不再校验或保存新语言配置。新增语言无需编译核心。
 
 `open_rom` 和 `select_rom_directory` 由 ReaWebAPI 文件对话框实现，请求保留当前语言的 `dialog_title`。系统文字由操作系统 / REAPER 决定。核心错误仍由页面翻译；未识别的错误保留原始信息。
 
-四个 Web 文件与 `Open.lua` 一起放在本仓库的 `ui/` 中，无需前端构建或修改核心包。
+四个 Web 文件与 `zaibuyidao_ReaGBA.lua` 一起放在本仓库的 `web/` 中，并随 ReaPack 包分发，无需前端构建。
 
 ## 验证
 

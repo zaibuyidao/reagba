@@ -3,6 +3,7 @@
 #include "bridge/CoreCommands.h"
 #include "save/SaveManager.h"
 #include "input/KeyBindings.h"
+#include "extension/RuntimePaths.h"
 #include <iostream>
 #include <future>
 #include <set>
@@ -58,10 +59,17 @@ static void SelfTest() {
     producer.join();
     Require(intact, "Triple buffer tear or old frame");
     const auto settingsRoot=fs::temp_directory_path()/("reagba-settings-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
-    const auto defaultROM=settingsRoot/"ReaGBA"/"ROM",customROM=settingsRoot/"Games";
+    const auto data=ResolveRuntimePaths(settingsRoot).data;
+    Require(data==settingsRoot/"Scripts"/"zaibuyidao Scripts"/"Modules"/"ReaGBA","Runtime data path mismatch");
+    const auto defaultROM=data/"roms",customROM=settingsRoot/"Games";
     fs::create_directories(customROM);
     {
-        EmulatorManager manager(defaultROM,settingsRoot/"ReaGBA");
+        auto instance=std::make_unique<EmulatorManager>(defaultROM,data);
+        auto &manager=*instance;
+        for (const auto *folder : {"config", "cache", "saves", "screenshots", "states", "roms"})
+            Require(fs::is_directory(data/folder),"Missing runtime folder: "+std::string(folder));
+        Require(!fs::exists(settingsRoot/"Scripts"/"zaibuyidao Scripts"/"ReaGBA"),"Legacy runtime directory created");
+        Require(!fs::exists(data/"ROM"),"Uppercase ROM directory created");
         auto settings=Call(manager,{{"action","get_settings"}}).at("result");
         Require(settings.at("rom_directory")=="","ROM folder must remain empty until selected");
         Require(settings.at("auto_download_covers")==false,"Covers must default to offline");
@@ -79,7 +87,8 @@ static void SelfTest() {
         manager.Shutdown();
     }
     {
-        EmulatorManager manager(defaultROM,settingsRoot/"ReaGBA");
+        auto instance=std::make_unique<EmulatorManager>(defaultROM,data);
+        auto &manager=*instance;
         const auto settings=Call(manager,{{"action","get_settings"}}).at("result");
         Require(fs::u8path(settings.at("rom_directory").get<std::string>())==customROM,"ROM folder did not survive restart");
         Require(fs::u8path(settings.at("last_rom_directory").get<std::string>())==customROM,"Last opened ROM folder did not survive restart");

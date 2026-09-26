@@ -31,7 +31,7 @@ node tests/frame_decode.cjs
 node tests/reaweb_video.cjs
 ```
 
-前端测试默认读取本仓库 `ui/`。浏览器测试需要 Playwright，可用 `REAGBA_NODE_MODULES` 指定模块目录，`REAGBA_BROWSER_CHANNEL=msedge` 使用本机 Edge。
+前端测试默认读取本仓库 `web/`。浏览器测试需要 Playwright，可用 `REAGBA_NODE_MODULES` 指定模块目录，`REAGBA_BROWSER_CHANNEL=msedge` 使用本机 Edge。
 
 ```sh
 python tests/native_service_api.py --core build/native/bin/Release/reaper_reagba-x64.dll --rom /path/to/test.gba --output build/native-service-check

@@ -3,7 +3,7 @@
 ## 职责
 
 ```text
-ui/Open.lua → ReaWebAPI WebView
+web/zaibuyidao_ReaGBA.lua → ReaWebAPI WebView
   ├─ reaper.host.service("reagba") → Native control / atomic input → mGBA
   └─ reaper.stream.open("reagba.video") ← independent binary transport ← emulator thread
 ```
@@ -32,7 +32,7 @@ CoreCommands 保持原有核心命令结构；回复 ID 由适配层补回。已
 
 ## Native Service 与界面
 
-`ui/Open.lua` 只打开或激活窗口后返回。界面和接入代码属于 ReaGBA 仓库，ReaWebAPI 提供通用窗口、服务与流能力。
+`web/zaibuyidao_ReaGBA.lua` 只打开或激活窗口后返回。界面和接入代码属于 ReaGBA 仓库，ReaWebAPI 提供通用窗口、服务与流能力。
 
 `reagba` 服务支持 `loadRom`、`closeRom`、`pause`、`resume`、`reset`、`saveState`、`loadState`、`getState`、`setSpeed`、`settings`，也接受原有 CoreCommands 的 action 名称。普通命令异步执行。大型封面或游戏库结果通过有界分块读取，保留原有 8 MiB 结果上限。每片最多 128 KiB，缓存最多四项和 16 MiB，绑定请求窗口，60 秒后过期。帧流不使用此控制回复通道。
 
@@ -52,4 +52,4 @@ WebView 使用 WebGL2 显示、整数缩放及原有 LCD 效果公式。参考�
 
 模拟与音频保持约 59.73 Hz 的核心时钟。帧传输不依赖 Lua defer、普通服务 RPC 或 Runtime::tick()。vsync 控制是否通过 requestAnimationFrame 提交；浏览器仍负责最终合成与节流。
 
-核心数据目录保持不变，避免移动存档；`config/ui.json` 由前端通过 ReaWebAPI 文件服务保存。窗口位置、停靠及 WebView profile 使用 ReaWebAPI 的持久化机制，不再访问旧 `window.json`。
+核心数据目录为 `<REAPER 资源目录>/Scripts/zaibuyidao Scripts/Modules/ReaGBA`，包含 `config/`、`cache/`、`saves/`、`screenshots/`、`states/` 和默认游戏目录 `roms/`。`config/ui.json` 由前端通过 ReaWebAPI 文件服务保存。窗口位置、停靠及 WebView profile 使用 ReaWebAPI 的持久化机制，不再访问旧 `window.json`。

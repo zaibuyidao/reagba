@@ -2,11 +2,11 @@
 
 ReaGBA 是 REAPER 内的 **GBA 核心扩展**。扩展提供 mGBA 模拟、音频、游戏输入、ROM 游戏库、封面、存档和截图接口，不注册操作列表入口，也不创建或管理 WebView。
 
-界面位于本仓库的 `ui/`，由 **ReaWebAPI v0.3.6.4+** 承载：
+界面位于本仓库的 `web/`，由 **ReaWebAPI v0.3.6.4+** 承载：
 
 ```text
-reagba/ui/
-  Open.lua
+reagba/web/
+  zaibuyidao_ReaGBA.lua
   index.html
   style.css
   i18n.js
@@ -17,9 +17,9 @@ reagba/ui/
 
 ## 安装与打开
 
-1. 完全退出 REAPER，将新构建的 `reaper_reagba-x64.dll` 放入 `C:\REAPER\UserPlugins`，并安装 ReaWebAPI v0.3.6.4 或更高版本的扩展。
-2. 保持 `reagba/ui` 的五个文件在同一目录。
-3. 重启 REAPER，在操作列表加载并运行该目录的 `Open.lua`。脚本描述为 **ReaGBA (ReaWebAPI)**。
+1. 完全退出 REAPER，将对应平台的 `reaper_reagba-<arch>.*` 放入 REAPER 资源目录的 `UserPlugins/`，并安装 ReaWebAPI v0.3.6.4 或更高版本的扩展。
+2. 将 ReaPack 压缩包中的 `ReaGBA/` 放入 `<REAPER 资源目录>/Scripts/zaibuyidao Scripts/Modules/`，保持 `ReaGBA/web/` 的五个文件在同一目录。
+3. 重启 REAPER，在操作列表加载并运行 `ReaGBA/web/zaibuyidao_ReaGBA.lua`。脚本描述为 **ReaGBA (ReaWebAPI)**。
 4. 点击“打开 ROM”，选择 `.gba` 文件；也可以在设置中选择 ROM 文件夹。
 
 旧原生入口 `zaibuyidao: ReaGBA` / `_REAGBA_SHOW` 已移除。已有快捷键、工具栏请绑定 Lua 脚本。重复执行启动脚本会激活同一窗口；启动脚本打开窗口后立即结束。关闭窗口会释放该页面的订阅，核心会话保留到显式销毁或扩展卸载，输入超过 750 ms 未刷新会自动释放。
@@ -28,7 +28,7 @@ reagba/ui/
 
 保留暂停/继续、重置、停止、1×/2×/4×、音量、跳帧、九个即时存档槽、电池存档、BMP 截图、最近游玩和可选封面下载。支持整数缩放、最近邻/线性过滤、LCD3X 和 lcd-grid-v2；显示和 Shader 在 WebView 内执行，PCM 仍由核心的 SDL 音频设备输出。
 
-核心数据继续使用 `<REAPER 资源目录>/Scripts/zaibuyidao Scripts/ReaGBA`，原有存档和 ROM 路径保持可用。WebView 的显示偏好通过 ReaWebAPI 写入该目录的 `config/ui.json`，首次使用会读取旧 `preferences.json` 中的显示偏好。窗口与浏览器数据由 ReaWebAPI 管理；旧宿主的 `window.json` 不再使用。
+Windows、macOS 和 Linux 的核心数据统一位于 `<REAPER 资源目录>/Scripts/zaibuyidao Scripts/Modules/ReaGBA`，包含 `config/`、`cache/`、`saves/`、`screenshots/`、`states/` 和默认游戏目录 `roms/`。升级时将旧目录中的数据移至此处，将 `ROM/` 改名为 `roms/`，如已选择的游戏目录发生变化，请在设置中重新选择。WebView 的显示偏好通过 ReaWebAPI 写入 `config/ui.json`，首次使用会读取旧 `preferences.json` 中的显示偏好。窗口与浏览器数据由 ReaWebAPI 管理，旧宿主的 `window.json` 不再使用。
 
 ## 构建
 
@@ -38,7 +38,7 @@ reagba/ui/
 python scripts/build.py
 ```
 
-生成的 DLL 位于 `build/native/bin/Release/reaper_reagba-x64.dll`，安装组件只向 `UserPlugins` 安装核心二进制。核心构建、平台安装包和 ReaPack 核心包均不再携带 Web 文件、WebView2 Loader 或 Linux WebView 辅助进程。UI 在本仓库 `ui/` 维护，不需要重新编译核心即可修改界面。
+生成的 DLL 位于 `build/native/bin/Release/reaper_reagba-x64.dll`，安装组件和平台安装包只向 `UserPlugins` 安装核心二进制。`ReaGBA-ReaPack-v0.1.0.zip` 的 `ReaGBA/` 下包含 `extension/`、`web/` 和 `ReaGBA.ext`。界面在本仓库 `web/` 维护，不需要重新编译核心即可修改界面。
 
 Linux 构建依赖为 C/C++ 工具链、CMake、pkg-config、SDL 音频/手柄所需开发库和 libcurl，不再要求 WebKitGTK。macOS 的 Objective-C/SWELL 支持仅用于 SDL 和 REAPER SDK 兼容，不包含窗口宿主。
 

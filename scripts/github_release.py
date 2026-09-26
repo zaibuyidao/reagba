@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import tempfile
 import urllib.error
 import urllib.request
 
@@ -119,11 +120,14 @@ def publish(api, directory, repository, tag, sha, expected, run=subprocess.run):
         run(["gh", "release", *args, "--repo", repository], check=True)
     if mode == "create":
         gh("create", tag, "--target", sha, "--title", f"ReaGBA {tag[1:]}",
-           "--generate-notes", "--draft")
+           "--draft")
     # A failed upload leaves an unpublished draft. A retry may replace its
     # partial files only after plan() verifies the exact source commit again.
     gh("upload", tag, *[str(path) for path in paths], "--clobber")
-    gh("edit", tag, "--draft=false")
+    with tempfile.TemporaryDirectory() as temporary:
+        notes = Path(temporary) / "release-notes.md"
+        notes.write_text(''.join(f'- {line}\n' for line in reapack.CHANGELOG), encoding="utf-8")
+        gh("edit", tag, "--notes-file", str(notes), "--draft=false")
 
 
 def main():

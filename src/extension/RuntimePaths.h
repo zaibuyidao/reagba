@@ -6,7 +6,7 @@ struct RuntimePaths {
     std::filesystem::path data;
 };
 inline RuntimePaths ResolveRuntimePaths(const std::filesystem::path& resources) {
-    const auto product=resources/"Scripts"/"zaibuyidao Scripts"/"ReaGBA";
+    const auto product=resources/"Scripts"/"zaibuyidao Scripts"/"Modules"/"ReaGBA";
     return {product};
 }
 }

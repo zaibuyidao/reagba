@@ -5,7 +5,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 import zipfile
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]/'scripts'))
 import release
@@ -16,7 +16,7 @@ class Packages(unittest.TestCase):
     def stage(self, root, platform):
         for relative in release.package_files(platform):
             path=root/relative;path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(b'fixture')
-        for relative in ('ui/index.html','Scripts/Open.lua','ROM/private.gba','reagba-webview-x86_64'):
+        for relative in ('web/index.html','Scripts/zaibuyidao_ReaGBA.lua','roms/private.gba','reagba-webview-x86_64'):
             path=root/relative;path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(b'excluded')
 
     def test_core_only_packages(self):
@@ -33,11 +33,15 @@ class Packages(unittest.TestCase):
             self.assertEqual({p.name for p in (root/'dist').iterdir()},set(github_release.asset_names(release.version())))
             with zipfile.ZipFile(root/'dist'/reapack.bundle_name()) as archive:
                 expected={'ReaGBA/ReaGBA.ext'}|{'ReaGBA/extension/'+pair[0] for pair in release.PLATFORMS.values()}
+                expected|={'ReaGBA/web/'+name for name in reapack.WEB_FILES}
                 self.assertEqual(set(archive.namelist()),expected)
+                self.assertEqual(archive.read('ReaGBA/ReaGBA.ext').decode(),reapack.manifest())
+                for name in reapack.WEB_FILES:
+                    self.assertEqual(archive.read('ReaGBA/web/'+name),(release.ROOT/'web'/name).read_bytes().replace(b'\r\n',b'\n'))
             for line in (root/'dist/SHA256SUMS.txt').read_text().splitlines():
                 digest,name=line.split('  ');self.assertEqual(digest,hashlib.sha256((root/'dist'/name).read_bytes()).hexdigest())
             with self.assertRaises(ValueError):release.aggregate(root/'artifacts',root/'bad','v99.0.0')
-            with zipfile.ZipFile(root/'artifacts'/release.asset_name('windows-x64'),'a') as archive:archive.writestr('ui/private.html',b'bad')
+            with zipfile.ZipFile(root/'artifacts'/release.asset_name('windows-x64'),'a') as archive:archive.writestr('web/private.html',b'bad')
             with self.assertRaises(ValueError):release.aggregate(root/'artifacts',root/'bad','v'+release.version())
 
     def test_missing_binary(self):
@@ -45,15 +49,39 @@ class Packages(unittest.TestCase):
             root=Path(tmp)
             with self.assertRaises(ValueError):release.collect(root,root/'out','windows-x64')
 
-    def test_reapack_only_installs_core(self):
+    def test_reapack_installs_core_and_web(self):
         manifest=reapack.manifest()
+        self.assertIn('@version '+release.version()+'\n',manifest)
         self.assertNotIn('github.com/zaibuyidao/reagba',manifest)
         self.assertNotIn('_REAGBA_SHOW',manifest)
-        self.assertEqual(len(reapack.sources()),5)
+        self.assertEqual(len(reapack.sources()),10)
+        self.assertIn('@link https://forum.cockos.com/showthread.php?t=311202\n',manifest)
+        self.assertEqual(manifest.split('@changelog\n')[1],''.join('  '+line+'\n' for line in reapack.CHANGELOG))
+        self.assertIn('/Modules/ReaGBA',reapack.BASE_URL)
         for entry in reapack.sources():
-            self.assertEqual(entry['type'],'extension')
-            self.assertNotIn('/',entry['file'])
+            if entry['type']=='extension':
+                self.assertNotIn('/',entry['file'])
+            else:
+                self.assertEqual(entry['platform'],'all')
+                self.assertTrue(entry['file'].startswith('web/'))
             self.assertIn(reapack.BASE_URL+'/'+entry['path'],manifest)
+        self.assertIn('[all script nomain] web/zaibuyidao_ReaGBA.lua',manifest)
+
+    def test_manifest_tracks_cmake_version(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            with patch.object(release,'ROOT',root):
+                for version in ('0.1.0','0.1.1'):
+                    (root/'CMakeLists.txt').write_text(f'project(ReaGBA VERSION {version} LANGUAGES C CXX)\n')
+                    self.assertIn('@version '+version+'\n',reapack.manifest())
+                    self.assertEqual(reapack.bundle_name(),f'ReaGBA-ReaPack-v{version}.zip')
+
+    def test_local_publisher_includes_web(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);self.stage(root/'stage','windows-x64')
+            release.prepare_publisher(root/'stage',root/'publisher','windows-x64')
+            self.assertEqual((root/'publisher/ReaGBA/ReaGBA.ext').read_text(),reapack.manifest())
+            self.assertEqual({p.name for p in (root/'publisher/ReaGBA/web').iterdir()},set(reapack.WEB_FILES))
 
 class Publication(unittest.TestCase):
     sha='a'*40
@@ -82,5 +110,19 @@ class Publication(unittest.TestCase):
             run=Mock();draft={'draft':True,'target_commitish':self.sha}
             github_release.publish(self.api(draft),root,'example/reagba','v0.2.0',self.sha,expected,run)
             self.assertEqual([c.args[0][2] for c in run.call_args_list],['upload','edit'])
+
+    def test_current_notes_for_new_and_resumed_release(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);expected=github_release.asset_names('0.2.0')
+            for name in expected:(root/name).write_bytes(b'fixture')
+            for existing in (None,{'draft':True,'target_commitish':self.sha}):
+                notes=[]
+                def capture(command,**kwargs):
+                    self.assertNotIn('--generate-notes',command)
+                    if command[2]=='edit':
+                        notes.append(Path(command[command.index('--notes-file')+1]).read_text(encoding='utf-8'))
+                github_release.publish(self.api(existing),root,'example/reagba','v0.2.0',self.sha,expected,capture)
+                self.assertEqual(notes,[''.join(f'- {line}\n' for line in reapack.CHANGELOG)])
+                self.assertNotIn('Full Changelog',notes[0])
 
 if __name__=='__main__':unittest.main()

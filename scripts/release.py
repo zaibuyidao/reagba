@@ -8,7 +8,7 @@ import shutil
 import zipfile
 
 ROOT=Path(__file__).resolve().parents[1]
-PRODUCT=Path('Scripts/zaibuyidao Scripts/ReaGBA')
+PRODUCT=Path('Scripts/zaibuyidao Scripts/Modules/ReaGBA')
 PLATFORMS={
     'windows-x64':('reaper_reagba-x64.dll',None),
     'macos-x86_64':('reaper_reagba-x86_64.dylib',None),
