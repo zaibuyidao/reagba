@@ -3,7 +3,7 @@
 function initReaGBABridge(){
  if(window.nativeRequest||!window.reaper?.host)return;
  const runtime=window.reaper,gba=runtime.host.service('reagba');
- let inputReady=false,docked=false,blocked=false,video=null,stream=null,stopStatus=null,stopInput=null,lastFrame=null;
+ let inputReady=false,docked=false,blocked=false,disposed=false,video=null,stream=null,stopStatus=null,stopInput=null,lastFrame=null;
  const pressed=new Set();
  const enrich=value=>value&&typeof value==='object'&&'loaded' in value?{...value,reaper:true,docked}:value;
  const report=error=>toast(error.message,true);
@@ -34,18 +34,24 @@ function initReaGBABridge(){
    if(window.onNativeState)window.onNativeState(enrich(state));
   });
   await window.ReaGBAPopout?.init(runtime,capabilities.windowId);
-  await gba.invoke('getState');inputReady=true;
+  if(disposed)return;
+  await gba.invoke('attach',{owner:!document.body.classList.contains('game-window')});
+  if(disposed)return;
+  inputReady=true;
   stream=await runtime.stream.open('reagba.video');
+  if(disposed){await stream.close();return;}
   stream.on('data',frame=>{lastFrame=frame;if(!ownsGame())return;video??=createGameVideo();video.frame({width:stream.info.width,height:stream.info.height,data:frame.data});});
   stream.on('error',report);
   let updating=false;
   stopStatus=await runtime.system.schedule(async()=>{
-   if(updating)return;updating=true;
-   try{window.onNativeState?.(enrich(await gba.invoke('getState')));}catch(error){report(error);}finally{updating=false;}
+   if(disposed||updating)return;updating=true;
+   try{const value=await gba.invoke('getState');if(!disposed)window.onNativeState?.(enrich(value));}catch(error){if(!disposed)report(error);}finally{updating=false;}
   },{delay:250,interval:250});
+  if(disposed)await stopStatus();
  })();
  const request=async command=>{
   await ready;
+  if(disposed)return {ok:false,error:'ReaGBA window is closed'};
   const {action,...payload}=command;
   try{return {ok:true,result:enrich(await invoke(action,payload))};}
   catch(error){return {ok:false,error:error.message};}
@@ -92,6 +98,7 @@ function initReaGBABridge(){
 
  window.nativeRequest=async command=>{
   await ready;
+  if(disposed)return {ok:false,error:'ReaGBA window is closed'};
   const ok=result=>({ok:true,result});
   switch(command.action){
    case 'popout':release();await window.ReaGBAPopout.toggle();return ok(true);
@@ -139,12 +146,11 @@ function initReaGBABridge(){
  document.addEventListener('keyup',event=>{const key=keyName(event.code);if(pressed.delete(key)){event.preventDefault();input();}});
  window.addEventListener('blur',release);
  document.addEventListener('visibilitychange',()=>{if(document.hidden)release();});
- ready.then(async()=>{stopInput=await runtime.system.schedule(input,{delay:200,interval:200});}).catch(error=>{report(error);window.ReaGBAPopout?.failed();});
- let disposed=false;
+ ready.then(async()=>{if(disposed)return;stopInput=await runtime.system.schedule(input,{delay:200,interval:200});if(disposed)await stopInput();}).catch(error=>{if(!disposed){report(error);window.ReaGBAPopout?.failed();}});
  function cleanup(){
-  if(disposed)return;disposed=true;release();window.ReaGBAPopout?.dispose();
+  if(disposed)return;disposed=true;release();inputReady=false;window.ReaGBAPopout?.dispose();
   return Promise.all([stopStatus?.(),stopInput?.(),stream?.close()]);
  }
- window.addEventListener('pagehide',()=>{if(!disposed){release();window.ReaGBAPopout?.dispose();disposed=true;stopStatus?.();stopInput?.();stream?.close();}});
+ window.addEventListener('pagehide',()=>{cleanup()?.catch(()=>{});});
 }
 

@@ -98,7 +98,7 @@ function renderAudio(){
  $('audio-hardware-row').hidden=settings.audio_output!=='reaper_output';
  const device=audioOutputs.reaper_device,channels=device?.channels||[];
  const channel=settings.audio_channel||0,mono=settings.audio_mono===true,value=channel+':'+(mono?1:2);
- const options=[],label=(index,count)=>t(count===1?'audioMono':'audioStereo',{channels:Array.from({length:count},(_,i)=>`${index+i+1}${channels[index+i]?' · '+channels[index+i]:''}`).join(' / ')});
+ const options=[],label=(index,count)=>`${index+1} ${Array.from({length:count},(_,i)=>channels[index+i]||`OUT ${index+i+1}`).join(' / ')}`;
  for(let i=0;i+1<channels.length;i++)options.push(new Option(label(i,2),i+':2'));
  for(let i=0;i<channels.length;i++)options.push(new Option(label(i,1),i+':1'));
  if(!options.some(option=>option.value===value))options.push(new Option(label(channel,mono?1:2)+' · '+t('audioChannelMissing'),value));

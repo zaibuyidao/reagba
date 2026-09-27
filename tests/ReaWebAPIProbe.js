@@ -11,9 +11,11 @@
   await wait(()=>document.getElementById('footer-version').textContent!=='v0.0.0'&&Object.keys(settings).length>0,'UI initialization');
   if(await reaper.GetExtState('ReaGBA.test','phase')==='reopen'){
    check(settings.language==='zh-CN'&&settings.shader==='lcd-grid-v2','UI preferences persist: '+settings.language+' / '+settings.shader);
+   const reopened=await service.invoke('getState');
+   check(!reopened.loaded&&!reopened.running,'closed main window released the core');
+   await service.invoke('loadRom',{path:root+'/fixture.gba'});
    const video=await reaper.stream.open('reagba.video');
-   await wait(()=>video.latest(),'paused frame replay after window reopen');
-   check(!(await service.invoke('getState')).running,'paused core persists');
+   await wait(()=>video.latest(),'fresh frame after window reopen');
    await service.invoke('loadState',{slot:1});await service.invoke('resume');await sleep(200);
    await service.invoke('closeRom');check(!(await service.invoke('getState')).loaded,'close ROM');
    await service.invoke('loadRom',{path:root+'/fixture.gba'});await wait(()=>video.latest().sequence>1n,'reload ROM');
@@ -53,6 +55,7 @@
   await service.invoke('pause');await video.close();
   await reaper.SetExtState('ReaGBA.test','metrics',JSON.stringify({...metrics,checks}),false);
   await reaper.SetExtState('ReaGBA.test','phase','reopen',false);
-  await reaper.window.open(root+'/web/index.html');await reaper.window.close();
+  await reaper.SetExtState('ReaGBA.test','closingWindow',String((await reaper.lifecycle.ready).windowId),false);
+  await reaper.window.close();
  }catch(error){await reaper.fs.writeText(root+'/result.json',JSON.stringify({ok:false,checks,metrics,error:String(error),stack:error.stack,toast:document.getElementById('toast').textContent,diagnostics:await reaper.debug.getDiagnostics()}),{overwrite:true});}
 })();

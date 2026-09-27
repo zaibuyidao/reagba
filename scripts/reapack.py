@@ -7,9 +7,10 @@ PLATFORM_IDS={'windows-x64':'win64','macos-x86_64':'darwin64','macos-arm64':'dar
 BASE_URL='https://raw.githubusercontent.com/zaibuyidao/ReaScripts/$commit/Modules/ReaGBA'
 WEB_FILES=('zaibuyidao_ReaGBA.lua','index.html','style.css','i18n.js','app.js','bridge.js','video.js','popout.js','game.html','game.js')
 CHANGELOG=(
-    'Add audio output modes for the system default device, REAPER hardware output with selectable stereo/mono channels, and REAPER tracks on Windows, macOS and Linux.',
-    'Route track audio through REAPER FX and mixing, using the first ReaGBA Preview track with selected-track fallback or following the first selected track. Remain silent without a target.',
-    'Correct audio clock drift with adaptive resampling and recover output after device and buffer interruptions.',
+    'Stop emulation and release all audio outputs when the main window or dock tab closes, including when page cleanup is unavailable.',
+    'Remove the redundant audio output description.',
+    'Rename audio output modes to System default device, Hardware output and Target track, with updated translations.',
+    'Simplify hardware output labels to the starting channel number and device channel names, listing stereo pairs before mono outputs.',
 )
 
 def sources():

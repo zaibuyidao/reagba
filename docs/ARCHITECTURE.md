@@ -34,11 +34,13 @@ CoreCommands 保持原有核心命令结构；回复 ID 由适配层补回。已
 
 `web/zaibuyidao_ReaGBA.lua` 只打开或激活窗口后返回。界面和接入代码属于 ReaGBA 仓库，ReaWebAPI 提供通用窗口、服务与流能力。
 
+主页面先调用 `attach({owner:true})` 创建或重新连接窗口所属的核心；独立游戏页使用 `attach({owner:false})`，不能创建核心。主线程通过 `ReaWeb_IsOpen` 检查主窗口，窗口 X、停靠分页 X 或原生窗口消失后停止线程、完成电池存档并释放音频与帧流，不依赖页面卸载请求。页面刷新保留同一窗口的核心，独立游戏页关闭不销毁主窗口核心。关闭后的状态轮询和输入不能重建核心。旧 ReaScript 创建的无界面会话仍由 `ReaGBA_Destroy` 显式销毁。
+
 `reagba` 服务支持 `loadRom`、`closeRom`、`pause`、`resume`、`reset`、`saveState`、`loadState`、`getState`、`setSpeed`、`settings`，也接受原有 CoreCommands 的 action 名称。普通命令异步执行。大型封面或游戏库结果通过有界分块读取，保留原有 8 MiB 结果上限。每片最多 128 KiB，缓存最多四项和 16 MiB，绑定请求窗口，60 秒后过期。帧流不使用此控制回复通道。
 
 `service.send('input', {mask, fast, active})` 在主线程直接更新原子输入状态，不排入 ROM/存档命令队列。失焦或清理页面时释放输入，活跃页面每 200 ms 刷新输入有效期。750 ms 无刷新时自动释放。
 
-`reagba.video` 为 240×160、RGBA8、960-byte stride 的 Frame Stream。模拟线程发布完整二进制帧，使用三槽有界缓冲。页面卡顿时保留最新帧，WebGL 直接接收 Uint8Array。消费者关闭只解除自己的连接，生产者关闭时通知所有页面。重开窗口可以读取暂停前的最后一帧。
+`reagba.video` 为 240×160、RGBA8、960-byte stride 的 Frame Stream。模拟线程发布完整二进制帧，使用三槽有界缓冲。页面卡顿时保留最新帧，WebGL 直接接收 Uint8Array。消费者关闭只解除自己的连接，生产者关闭时通知所有页面。同一窗口刷新或重新连接画面时可以读取暂停前的最后一帧；关闭主窗口后重新打开会创建空闲核心。
 
 `index.html` 与独立游戏页 `game.html` 共用 `bridge.js` 和 `video.js`。`popout.js` 使用同源存储中的窗口 ID 与短期心跳协调显示和输入归属。主窗口收回画面或关闭后，独立页自动关闭。独立页退出或心跳失效时主页面恢复画面，两者不创建额外核心会话。
 

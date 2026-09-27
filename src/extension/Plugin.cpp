@@ -8,6 +8,7 @@
 #include <chrono>
 #include <cstring>
 #include <limits>
+#include <set>
 
 namespace {
 using namespace reagba;
@@ -23,11 +24,14 @@ ReaWeb_PublishFrameFn publishFrame = nullptr;
 ReaWeb_CloseStreamFn closeStream = nullptr;
 ReaWeb_UnregisterServiceFn unregisterService = nullptr;
 ReaWeb_CompleteServiceCallFn completeCall = nullptr;
+bool (*isWindowOpen)(int) = nullptr;
 void RegisterWebService();
 
 // The core APIs remain usable without ReaWebAPI. Native integration is optional.
 struct Session {
     int id;
+    int ownerWindow = 0;
+    std::set<int> windows;
     bool sdl = false;
     ReaWeb_StreamHandle video = 0;
     uint64_t videoSequence = 0;
@@ -205,6 +209,11 @@ bool SetInput(int id, int mask, bool fast, bool active) {
 void Tick() {
     RegisterWebService();
     if (!session) return;
+    // Native window lifetime also covers dock-tab close and lost page cleanup.
+    if (session->ownerWindow && !isWindowOpen(session->ownerWindow)) {
+        session.reset();
+        return;
+    }
     auto& s = *session;
     s.audio->Update();
     {
@@ -228,6 +237,22 @@ int WebRequest(void*, uint64_t handle, uint64_t request, int window, const char*
         auto command = Json::parse(payload);
         if (command.is_null()) command = Json::object();
         if (!command.is_object()) return REAWEB_INVALID_ARGUMENT;
+        if (session && session->ownerWindow && !isWindowOpen(session->ownerWindow)) session.reset();
+        if (!isWindowOpen || !isWindowOpen(window)) throw std::runtime_error("ReaGBA window is closed");
+        if (name == "attach") {
+            if (!request) return REAWEB_INVALID_ARGUMENT;
+            const bool owner = command.value("owner", true);
+            if (!session && owner) {
+                if (!Create(command.value("dataDirectory", std::string()).c_str())) throw std::runtime_error(lastError);
+                session->ownerWindow = window;
+            }
+            if (!session || !session->ownerWindow) throw std::runtime_error("No ReaGBA main window session");
+            if (owner && session->ownerWindow != window) throw std::runtime_error("A ReaGBA main window is already running");
+            session->windows.insert(window);
+            return completeCall(handle, request, "true", REAWEB_OK, nullptr);
+        }
+        // Late polling/input from a closing popout cannot recreate the core.
+        if (!session || !session->windows.count(window)) throw std::runtime_error("ReaGBA window is not attached");
         if (name == "input") {
             if (!session) return REAWEB_SERVICE_ERROR;
             const auto mask = command.value("mask", 0);
@@ -242,10 +267,6 @@ int WebRequest(void*, uint64_t handle, uint64_t request, int window, const char*
             return REAWEB_OK;
         }
         if (!request) return REAWEB_INVALID_ARGUMENT;
-        if (!session && !Create(command.value("dataDirectory", std::string()).c_str())) {
-            completeCall(handle, request, nullptr, REAWEB_SERVICE_ERROR, lastError.c_str());
-            return REAWEB_OK;
-        }
         if (!session->video) {
             completeCall(handle, request, nullptr, REAWEB_SERVICE_ERROR, "Close the legacy core session before native Stream attachment");
             return REAWEB_OK;
@@ -318,7 +339,8 @@ void RegisterWebService() {
     closeStream = reinterpret_cast<ReaWeb_CloseStreamFn>(plugin->GetFunc("ReaWeb_CloseStream"));
     unregisterService = reinterpret_cast<ReaWeb_UnregisterServiceFn>(plugin->GetFunc("ReaWeb_UnregisterService"));
     completeCall = reinterpret_cast<ReaWeb_CompleteServiceCallFn>(plugin->GetFunc("ReaWeb_CompleteServiceCall"));
-    if (!registerService || !setInput || !setShutdown || !createFrame || !publishFrame || !closeStream || !unregisterService || !completeCall) return;
+    isWindowOpen = reinterpret_cast<bool (*)(int)>(plugin->GetFunc("ReaWeb_IsOpen"));
+    if (!registerService || !setInput || !setShutdown || !createFrame || !publishFrame || !closeStream || !unregisterService || !completeCall || !isWindowOpen) return;
     ReaWeb_ServiceCallbacks callbacks{sizeof(ReaWeb_ServiceCallbacks), REAWEB_SERVICE_ABI, nullptr, WebRequest, nullptr};
     if (registerService("reagba", &callbacks, &webService) != REAWEB_OK) { webService = 0; return; }
     setInput(webService, "input");

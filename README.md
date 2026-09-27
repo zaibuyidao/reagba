@@ -27,7 +27,7 @@ reagba/web/
 3. 重启 REAPER，在操作列表加载并运行 `ReaGBA/web/zaibuyidao_ReaGBA.lua`。脚本描述为 **ReaGBA (ReaWebAPI)**。
 4. 点击“打开 ROM”，选择 `.gba` 文件；也可以在设置中选择 ROM 文件夹。
 
-旧原生入口 `zaibuyidao: ReaGBA` / `_REAGBA_SHOW` 已移除。已有快捷键、工具栏请绑定 Lua 脚本。重复执行启动脚本会激活同一窗口；启动脚本打开窗口后立即结束。关闭窗口会释放该页面的订阅，核心会话保留到显式销毁或扩展卸载，输入超过 750 ms 未刷新会自动释放。
+旧原生入口 `zaibuyidao: ReaGBA` / `_REAGBA_SHOW` 已移除。已有快捷键、工具栏请绑定 Lua 脚本。重复执行启动脚本会激活同一窗口；启动脚本打开窗口后立即结束。关闭主窗口（窗口 X 或停靠分页 X）会停止模拟、保存电池存档并释放全部音频输出；关闭独立游戏窗口则收回主界面。输入超过 750 ms 未刷新会自动释放。
 
 点击“弹出游戏画面”可在独立浮动窗口中显示游戏。弹窗标题为 `ReaGBA - 游戏名称`，页面只保留四周边距为 3px 的画布。关闭弹窗或点击主界面的“恢复到主界面”可收回画面。无论游戏库展开或折叠，弹出后主界面均保留原位置和尺寸的空画布。游戏库折叠时，游戏信息置顶、控制区置底，画布在中间居中。弹出时画布留空，收回后在相同位置恢复游戏图像。缩短主窗口高度时保留游戏画面尺寸，通过滚动访问超出区域。展开时仍可通过分隔条主动调整画面大小。
 
@@ -55,7 +55,7 @@ Windows、macOS 和 Linux 的核心数据统一位于 `<REAPER 资源目录>/Scr
 python scripts/build.py
 ```
 
-生成的 DLL 位于 `build/native/bin/Release/reaper_reagba-x64.dll`，安装组件和平台安装包只向 `UserPlugins` 安装核心二进制。`ReaGBA-ReaPack-v0.1.2.zip` 的 `ReaGBA/` 下包含 `extension/`、`web/` 和 `ReaGBA.ext`。界面在本仓库 `web/` 维护，不需要重新编译核心即可修改界面。
+生成的 DLL 位于 `build/native/bin/Release/reaper_reagba-x64.dll`，安装组件和平台安装包只向 `UserPlugins` 安装核心二进制。`ReaGBA-ReaPack-v0.1.3.zip` 的 `ReaGBA/` 下包含 `extension/`、`web/` 和 `ReaGBA.ext`。界面在本仓库 `web/` 维护，不需要重新编译核心即可修改界面。
 
 Linux 构建依赖为 C/C++ 工具链、CMake、pkg-config、SDL 音频/手柄所需开发库和 libcurl，不再要求 WebKitGTK。macOS 的 Objective-C/SWELL 支持仅用于 SDL 和 REAPER SDK 兼容，不包含窗口宿主。
 

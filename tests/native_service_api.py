@@ -3,7 +3,7 @@ import argparse,ctypes as C,json,os,queue,random,struct,threading,time,zlib
 from pathlib import Path
 p=argparse.ArgumentParser(description=__doc__);p.add_argument('--core',type=Path,required=True);p.add_argument('--rom',type=Path,required=True);p.add_argument('--output',type=Path,required=True);a=p.parse_args()
 a.output.mkdir(parents=True,exist_ok=False);os.environ['SDL_AUDIODRIVER']='dummy'
-resource=C.create_string_buffer(str(a.output.resolve()).encode());functions={};registered={};refs=[];replies=queue.Queue();events=[];failures=[];frames=0;stream_open=False;service=None;shutdown=None
+resource=C.create_string_buffer(str(a.output.resolve()).encode());functions={};registered={};refs=[];replies=queue.Queue();events=[];failures=[];frames=0;stream_open=False;service=None;shutdown=None;open_windows={1,2}
 U=C.c_uint64;P=C.c_void_p;S=C.c_char_p;I=C.c_int
 REQUEST=C.CFUNCTYPE(I,P,U,U,I,S,S)
 class Callbacks(C.Structure):_fields_=[('size',C.c_uint32),('abi',C.c_uint32),('data',P),('request',REQUEST),('cancel',P)]
@@ -14,6 +14,8 @@ def export(name,result,*args):
  return wrap
 @export('GetResourcePath',P)
 def resource_path():return C.addressof(resource)
+@export('ReaWeb_IsOpen',C.c_bool,I)
+def is_window_open(window):return window in open_windows
 @export('ReaWeb_RegisterService',I,S,C.POINTER(Callbacks),C.POINTER(U))
 def add(name,callbacks,handle):
  global service
@@ -59,19 +61,24 @@ def get(name):return functions.get(name)
 class Info(C.Structure):_fields_=[('version',I),('window',P),('register',REGISTER),('get',GET)]
 info=Info(0x20e,None,register,get);lib=C.CDLL(str(a.core.resolve()));entry=lib.ReaperPluginEntry;entry.argtypes=[P,C.POINTER(Info)];entry.restype=I
 counter=0
-def call(method,data=None):
+def call(method,data=None,window=1,error=False):
  global counter
- counter+=1;assert service.request(None,1,counter,1,method.encode(),json.dumps(data).encode())==0
- request,status,result=replies.get(timeout=8);assert request==counter and status==0,(request,status,result)
+ counter+=1;assert service.request(None,1,counter,window,method.encode(),json.dumps(data).encode())==0
+ request,status,result=replies.get(timeout=8);assert request==counter,(request,status,result)
+ if error:
+  assert status!=0,(request,status,result)
+  return result
+ assert status==0,(request,status,result)
  if isinstance(result,dict) and '__reagbaResult' in result:
   blob=result['__reagbaResult'];offset=0;parts=[]
   while offset<blob['bytes']:
-   part=call('readResult',{'token':blob['token'],'offset':offset});assert part['offset']==offset and part['bytes']<=128*1024
+   part=call('readResult',{'token':blob['token'],'offset':offset},window=window);assert part['offset']==offset and part['bytes']<=128*1024
    parts.append(part['text']);offset+=part['bytes']
   assert offset==blob['bytes'];result=json.loads(''.join(parts))
  return result
 try:
  assert entry(None,C.byref(info))==1;C.CFUNCTYPE(None)(registered['timer'])();assert service
+ call('attach',{'owner':True})
  call('getState')
  outputs=call('get_audio_outputs');assert outputs['reaper_available'] is False and outputs['status']['audio_output']=='system'
  call('setSettings',{'settings':{'audio_output':'reaper_output'}})
@@ -100,11 +107,26 @@ try:
    assert time.monotonic()<deadline,'Input was not consumed by the emulator'
    time.sleep(.002)
  call('pause');call('saveState',{'slot':1});call('loadState',{'slot':1});call('reset');call('closeRom');assert not call('getState')['loaded'];call('loadRom',{'path':str(a.rom.resolve())})
+ # Closing the main native window destroys every audio mode even without JS cleanup.
+ for mode in ['system','reaper_output','reaper_track']:
+  call('setSettings',{'settings':{'audio_output':mode}})
+  call('attach',{'owner':False},window=2)
+  call('attach',{'owner':True},window=2,error=True)
+  open_windows.remove(2);C.CFUNCTYPE(None)(registered['timer'])()
+  assert stream_open and call('getState')['loaded'],'child close destroyed the main session'
+  open_windows.add(2);call('attach',{'owner':False},window=2)
+  call('attach',{'owner':True});assert call('getState')['loaded'],'main reload lost the session'
+  open_windows.remove(1);C.CFUNCTYPE(None)(registered['timer'])()
+  before=frames;time.sleep(.1);assert not stream_open and frames==before,'main close left a producer running'
+  call('getState',window=2,error=True);call('attach',{'owner':False},window=2,error=True)
+  call('attach',{'owner':True},error=True);assert not stream_open,'late requests recreated a closed session'
+  open_windows.add(1);call('attach',{'owner':True});assert not call('getState')['loaded'],'reopen must start with no running ROM'
+  call('loadRom',{'path':str(a.rom.resolve())})
  shutdown(None);before=frames;time.sleep(.1);assert not stream_open and frames==before
  # Re-register after the runtime provider requests shutdown, then unload ReaGBA first.
- C.CFUNCTYPE(None)(registered['timer'])();call('getState');call('loadRom',{'path':str(a.rom.resolve())});call('resume');time.sleep(.1)
+ C.CFUNCTYPE(None)(registered['timer'])();call('attach',{'owner':True});call('getState');call('loadRom',{'path':str(a.rom.resolve())});call('resume');time.sleep(.1)
  entry(None,None);before=frames;time.sleep(.1);assert not registered and not stream_open and frames==before
  assert events[-2:]==['close','unregister'],events
  assert not failures,failures
- print(json.dumps({'passed':True,'producerFps':fps,'checks':['service ABI','real ROM','input state','controls','large cover reply','save/load','runtime-first shutdown','producer-first unload','no callbacks after close']}))
+ print(json.dumps({'passed':True,'producerFps':fps,'checks':['service ABI','real ROM','input state','controls','large cover reply','save/load','main close in all audio modes','child close','reload','no late recreation','runtime-first shutdown','producer-first unload','no callbacks after close']}))
 finally:entry(None,None)

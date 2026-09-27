@@ -1,15 +1,15 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 const source=fs.readFileSync(require('./ui_path.cjs')('bridge.js'),'utf8')+'\ninitReaGBABridge();';
-function fixture(){
+function fixture(child=false){
  const sent=[],requests=[],events={},errors=[],timers=[];let focus=0,frames=0;
- const service={send:(method,payload)=>sent.push({method,payload}),invoke:(method,payload)=>method==='getState'?Promise.resolve({loaded:false}):new Promise((resolve,reject)=>requests.push({method,payload,resolve,reject}))};
+ const service={send:(method,payload)=>sent.push({method,payload}),invoke:(method,payload)=>method==='attach'?(sent.push({method,payload}),Promise.resolve(true)):method==='getState'?Promise.resolve({loaded:false}):new Promise((resolve,reject)=>requests.push({method,payload,resolve,reject}))};
  const runtime={lifecycle:{ready:Promise.resolve({windowId:1}),on:async(name,fn)=>events['lifecycle:'+name]=fn},host:{service:name=>{assert.equal(name,'reagba');return service;}},
   stream:{open:async name=>({info:{width:240,height:160},on:(event,fn)=>events['stream:'+event]=fn,close:async()=>sent.push({method:'detach'})})},
   system:{schedule:async(fn,options)=>{const timer={fn,options,stopped:false};timers.push(timer);return async()=>{timer.stopped=true;};}},
   window:{setIconVisible:async()=>{},isDocked:async()=>false,setDocked:async value=>value,focus:async()=>{focus++;}},
   events:{on:async(name,callback)=>{events[name]=callback;}},dialog:{openFile:async()=>null,selectFolder:async()=>null}};
  const window={reaper:runtime,addEventListener:(name,fn)=>events[name]=fn};
- const document={hidden:false,hasFocus:()=>true,addEventListener:(name,fn)=>events['dom:'+name]=fn,getElementById:()=>({focus(){}})};
+ const document={body:{classList:{contains:name=>child&&name==='game-window'}},hidden:false,hasFocus:()=>true,addEventListener:(name,fn)=>events['dom:'+name]=fn,getElementById:()=>({focus(){}})};
  const context={window,document,settings:{},defaultKeys:['J','K','Space','Return','D','A','W','S','Q','O'],state:{loaded:false},editing:()=>false,
   toast:message=>errors.push(message),createGameVideo:()=>({frame:()=>{frames++;},draw(){}}),queueMicrotask,requestAnimationFrame(){}};
  vm.runInNewContext(source,context);
@@ -18,6 +18,8 @@ function fixture(){
 const flush=async()=>{for(let i=0;i<30;i++)await Promise.resolve();};
 (async()=>{
  const f=fixture();await flush();assert.equal(f.requests.length,0);
+ assert.equal(f.sent.find(v=>v.method==='attach').payload.owner,true);
+ const child=fixture(true);await flush();assert.equal(child.sent.find(v=>v.method==='attach').payload.owner,false);
  const first=f.window.nativeRequest({action:'pause'}),second=f.window.nativeRequest({action:'reset'});await flush();
  assert.equal(f.requests.length,2);f.requests[1].resolve({loaded:true,title:'中文'});assert.equal((await second).result.title,'中文');
  f.requests[0].reject(Error('Invalid ROM'));assert.equal((await first).error,'Invalid ROM');
@@ -45,6 +47,9 @@ const flush=async()=>{for(let i=0;i<30;i++)await Promise.resolve();};
  await assert.rejects(prefs.window.nativeRequest({action:'set_settings',settings:{shader:'broken'}}),/Unknown shader/);
  getting=prefs.window.nativeRequest({action:'get_settings'});await flush();answer();assert.equal((await getting).result.language,'zh-CN');
  await f.events['lifecycle:cleanup']();f.events.pagehide();await flush();assert(f.timers.every(t=>t.stopped));assert(f.sent.some(v=>v.method==='detach'));
+ const count=f.requests.length;assert.equal((await f.window.nativeRequest({action:'start'})).ok,false);assert.equal(f.requests.length,count);
+ const sent=f.sent.length;await f.timers.find(t=>t.options.interval===200).fn();assert.equal(f.sent.length,sent,'cleanup disables late input');
+ const early=fixture();early.events.pagehide();await flush();assert(!early.sent.some(v=>v.method==='attach'));assert.equal(early.timers.length,0,'closing during initialization cannot restart polling');
  const existing=()=>{};const window={nativeRequest:existing};vm.runInNewContext(source,{window});assert.equal(window.nativeRequest,existing);
  assert.deepEqual(f.errors,[]);console.log('PASS: Native Service commands, errors, state, docking, binary frames, latest input, preferences and cleanup');
 })().catch(error=>{console.error(error);process.exitCode=1;});
