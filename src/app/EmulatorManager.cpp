@@ -24,6 +24,14 @@ EmulatorManager::EmulatorManager(fs::path romDir, fs::path dataDir)
     if (!preferences_.contains("rom_directory") || !preferences_["rom_directory"].is_string())
         preferences_["rom_directory"] = "";
     NormalizeKeys(preferences_);
+    const auto mode = preferences_.value("audio_output", Json());
+    if (mode != "system" && mode != "reaper_output" && mode != "reaper_track") preferences_["audio_output"] = "system";
+    const auto track = preferences_.value("audio_track", Json());
+    if (track != "preview" && track != "selected") preferences_["audio_track"] = "preview";
+    const auto channel = preferences_.value("audio_channel", Json());
+    if (!channel.is_number_integer() || channel < 0 || channel > 1023) preferences_["audio_channel"] = 0;
+    if (!preferences_.value("audio_mono", Json()).is_boolean()) preferences_["audio_mono"] = false;
+    audioOutput_ = {preferences_["audio_output"], preferences_["audio_track"], preferences_["audio_channel"], preferences_["audio_mono"]};
     if (!preferences_.contains("auto_download_covers") || !preferences_["auto_download_covers"].is_boolean())
         preferences_["auto_download_covers"] = false;
     covers_.Enable(preferences_["auto_download_covers"].get<bool>());
@@ -99,6 +107,16 @@ Json EmulatorManager::Handle(const Json &cmd) {
         auto settings = cmd.at("settings");
         if (!settings.is_object())
             throw std::runtime_error("settings must be an object");
+        if (settings.contains("audio_output") && settings["audio_output"] != "system" &&
+            settings["audio_output"] != "reaper_output" && settings["audio_output"] != "reaper_track")
+            throw std::runtime_error("Unknown audio output");
+        if (settings.contains("audio_track") && settings["audio_track"] != "preview" && settings["audio_track"] != "selected")
+            throw std::runtime_error("Unknown audio track target");
+        if (settings.contains("audio_channel") && (!settings["audio_channel"].is_number_integer() ||
+            settings["audio_channel"] < 0 || settings["audio_channel"] > 1023))
+            throw std::runtime_error("Invalid audio output channel");
+        if (settings.contains("audio_mono") && !settings["audio_mono"].is_boolean())
+            throw std::runtime_error("Audio mono must be a boolean");
         if (settings.contains("auto_download_covers") && !settings["auto_download_covers"].is_boolean())
             throw std::runtime_error("Automatic cover download must be a boolean");
         for (const auto *key : {"rom_directory", "last_rom_directory"})
@@ -107,9 +125,14 @@ Json EmulatorManager::Handle(const Json &cmd) {
                 throw std::runtime_error("ROM directories must be non-empty paths");
         for (auto it = settings.begin(); it != settings.end(); ++it)
             if (it.key() == "keys" || it.key() == "bios" || it.key() == "fast_forward_key" ||
-                it.key() == "rom_directory" || it.key() == "last_rom_directory" || it.key() == "auto_download_covers")
+                it.key() == "rom_directory" || it.key() == "last_rom_directory" || it.key() == "auto_download_covers" ||
+                it.key() == "audio_output" || it.key() == "audio_track" || it.key() == "audio_channel" || it.key() == "audio_mono")
                 preferences_[it.key()] = it.value();
         Persist();
+        {
+            std::lock_guard<std::mutex> lock(audioOutputMutex_);
+            audioOutput_ = {preferences_["audio_output"], preferences_["audio_track"], preferences_["audio_channel"], preferences_["audio_mono"]};
+        }
         covers_.Enable(preferences_.value("auto_download_covers", false));
         return preferences_;
     }

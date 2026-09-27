@@ -8,7 +8,7 @@ web/zaibuyidao_ReaGBA.lua → ReaWebAPI WebView
   └─ reaper.stream.open("reagba.video") ← independent binary transport ← emulator thread
 ```
 
-ReaGBA 核心扩展不链接任何浏览器 SDK，不创建窗口，不注册 command_id、gaccel、hookcommand 或 hwnd_info。扩展的 timer 负责服务延迟注册、游戏手柄轮询、输入超时和控制回复缓存过期。`src/bridge/CoreCommands` 是独立于 UI 的核心命令分发器。
+ReaGBA 核心扩展不链接任何浏览器 SDK，不创建窗口，不注册 command_id、gaccel、hookcommand 或 hwnd_info。扩展的 timer 负责服务延迟注册、游戏手柄轮询、输入超时、音频输出切换与目标跟踪，以及控制回复缓存过期。`src/bridge/CoreCommands` 是独立于 UI 的核心命令分发器。
 
 ReaWebAPI 直接加载普通 HTML 目录并注入 `window.reaper`，不复制 runtime/reaper.js、不修改 ReaWebAPI 的基础运行架构。原生各平台 WebView 宿主由 ReaWebAPI 维护。旧 ReaGBA Windows/macOS/Linux 宿主和 Linux UI 辅助进程已删除。
 
@@ -48,7 +48,15 @@ ReaWebAPI 或 ReaGBA 卸载时，服务关闭回调先停止并等待模拟线�
 
 ## 画面、音频与持久化
 
-mGBA 在工作线程独占运行，像素发布至原生流并保留旧核心 API 的三缓冲，PCM 通过原有 SPSC 缓冲交给 SDL 音频回调。读取画面不阻塞模拟线程，截图仍是未经 Shader 处理的核心 BMP。
+mGBA 在工作线程独占运行，像素发布至原生流并保留旧核心 API 的三缓冲，PCM 通过 SPSC 缓冲交给唯一的活动音频消费者。读取画面不阻塞模拟线程，截图仍是未经 Shader 处理的核心 BMP。
+
+`audio_output` 接受 `system`（默认）、`reaper_output`、`reaper_track`。`audio_track` 接受 `preview`（默认）或 `selected`，由已有 `set_settings` / `setSettings` 保存至 `config/preferences.json`。`preview` 按轨道顺序查找精确名称 `ReaGBA Preview`，没有同名轨道时回退至 `GetSelectedTrack(project, 0)`。`selected` 直接跟随第一条选中轨道。没有目标时静音。主线程重新解析目标，不持久化轨道指针，不修改工程轨道或 FX。
+
+系统默认设备（System default device）使用 SDL 默认 S16 立体声设备。REAPER 硬件输出（REAPER hardware output）使用 `PlayPreviewEx`，绕过 Master FX 与 Master 推子。`audio_channel` 是当前设备中从零开始的首通道序号（0–1023，默认 0），`audio_mono` 是单声道标志（默认 false）。立体声使用该通道及下一通道，单声道使用 `m_out_chan` 的 1024 标志。通道数量和名称来自 `GetNumAudioOutputs` / `GetOutputChannelName`。配置随 `set_settings` 保存，不绑定设备名称。通道缺失时保持静音，不回退至其他通道。设备停止、恢复或格式变化时主线程重新注册预听。
+
+REAPER 轨道（REAPER track）使用 `PlayTrackPreview2Ex` 在目标轨道的 FX 之前注入。两种 REAPER 模式均关闭 REAPER 源预缓冲，实时 `PCM_source::GetSamples` 拉取 PCM，保留 ReaGBA 音量。三种模式共享线性重采样器，按缓冲水位的低通结果进行 PI 速率校正，修正范围为 ±0.5%，不改变模拟器帧时钟。启动和欠载后预缓冲约 47 ms 加一个输出块，队列上限为 500 ms。消费者在积压明显超过目标时丢弃旧样本并重新同步，超出校正范围的持续过载仍可能产生断点。音频回调不分配内存，不调用 UI、Lua 或 Native Service。欠载补零，暂停及长时间停止拉取后丢弃旧 PCM。切换和销毁在停止旧消费者后重置队列。
+
+扩展适配层新增 `get_audio_outputs`，返回 `{reaper_available,reaper_device,status}`。`reaper_device` 包含 `running`、按索引排列的通道名 `channels`，以及 `GetAudioDeviceInfo` 的字符串属性 `MODE`、`IDENT_OUT`、`SRATE`、`BSIZE`。`status` 包含 `audio_output`、`audio_track`、`audio_channel`、`audio_mono`、`audio_device`、`audio_error`、`audio_state` 和 `audio_outputs_revision`。状态码为 `active`、`no_track`、`engine_stopped`、`channel_unavailable` 或 `unavailable`。设备清单变化时递增 revision，设置页据此刷新。这些状态字段也附加到模拟器状态回复。`audio_device` 表示设备或预听注册是否成功，不代表目标轨道未静音或物理设备正在发声。无目标轨道是正常静音状态。打开设备或注册失败会报告错误并定期重试，不自动切换输出模式。旧七个 ReaScript 导出与已有命令结构保持不变。PCM 不经过 ReaWebAPI Stream，设置沿用 Native Service。
 
 WebView 使用 WebGL2 显示、整数缩放及原有 LCD 效果公式。参考公式与原生 D3D 数学验证只保留于 `tests/reference/video`，不链接进扩展。没有 WebGL2 时使用 Canvas 2D 与相同的 CPU Shader 公式回退显示，性能取决于窗口大小和设备。
 

@@ -7,9 +7,9 @@ PLATFORM_IDS={'windows-x64':'win64','macos-x86_64':'darwin64','macos-arm64':'dar
 BASE_URL='https://raw.githubusercontent.com/zaibuyidao/ReaScripts/$commit/Modules/ReaGBA'
 WEB_FILES=('zaibuyidao_ReaGBA.lua','index.html','style.css','i18n.js','app.js','bridge.js','video.js','popout.js','game.html','game.js')
 CHANGELOG=(
-    'Add a canvas-only game window with the game name in its title, 3px page spacing and restoration on Windows, macOS and Linux.',
-    'Preserve game size on height changes and retain the main canvas across pop-out and restore, with collapsed-library information at the top and controls at the bottom.',
-    'Fix detail-card cover alignment and play-button overflow, preserve status spacing when detached, and remove symbols from start, resume and pause buttons.',
+    'Add audio output modes for the system default device, REAPER hardware output with selectable stereo/mono channels, and REAPER tracks on Windows, macOS and Linux.',
+    'Route track audio through REAPER FX and mixing, using the first ReaGBA Preview track with selected-track fallback or following the first selected track. Remain silent without a target.',
+    'Correct audio clock drift with adaptive resampling and recover output after device and buffer interruptions.',
 )
 
 def sources():

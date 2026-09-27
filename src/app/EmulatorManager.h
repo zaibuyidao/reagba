@@ -5,6 +5,7 @@
 #include "save/SaveManager.h"
 #include "video/FrameBuffer.h"
 #include "audio/AudioBuffer.h"
+#include "audio/AudioOutput.h"
 #include <thread>
 #include <mutex>
 #include <condition_variable>
@@ -27,6 +28,10 @@ class EmulatorManager {
     AudioBuffer audio;
     std::atomic<float> volume{0.3f};
     std::atomic<bool> audible{false};
+    AudioOutput GetAudioOutput() const {
+        std::lock_guard<std::mutex> lock(audioOutputMutex_);
+        return audioOutput_;
+    }
 
   private:
     struct Request {
@@ -38,6 +43,8 @@ class EmulatorManager {
     std::deque<Request> queue_;
     std::thread worker_;
     bool quit_ = false;
+    mutable std::mutex audioOutputMutex_;
+    AudioOutput audioOutput_;
     std::atomic<uint32_t> keys_{0};
     std::atomic<bool> fastForward_{false};
     uint32_t appliedInput_ = 0, observedInput_ = 0;

@@ -26,16 +26,16 @@ static void SelfTest() {
     Require(SHA256({'a', 'b', 'c'}) == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
             "SHA-256 abc");
     AudioBuffer ring;
-    std::vector<int16_t> in(10000), out(10000);
+    std::vector<int16_t> in(AudioBuffer::Capacity + 1808), out(in.size());
     for (size_t i = 0; i < in.size(); ++i)
         in[i] = int16_t(i);
-    Require(ring.Push(in.data(), in.size()) == 8192, "Ring capacity");
+    Require(ring.Push(in.data(), in.size()) == AudioBuffer::Capacity, "Ring capacity");
     Require(ring.Pop(out.data(), 4000) == 4000, "Ring read");
     Require(std::equal(out.begin(), out.begin() + 4000, in.begin()), "Ring data");
     Require(ring.Push(in.data(), 4000) == 4000, "Ring wrap");
-    Require(ring.Pop(out.data(), 8192) == 8192, "Wrapped ring read");
-    Require(std::equal(out.begin(), out.begin() + 4192, in.begin() + 4000), "Ring preserves unread tail");
-    Require(std::equal(out.begin() + 4192, out.begin() + 8192, in.begin()), "Ring preserves wrapped samples");
+    Require(ring.Pop(out.data(), AudioBuffer::Capacity) == AudioBuffer::Capacity, "Wrapped ring read");
+    Require(std::equal(out.begin(), out.begin() + AudioBuffer::Capacity - 4000, in.begin() + 4000), "Ring preserves unread tail");
+    Require(std::equal(out.begin() + AudioBuffer::Capacity - 4000, out.begin() + AudioBuffer::Capacity, in.begin()), "Ring preserves wrapped samples");
     FrameBuffer frames;
     std::atomic<bool> done{false};
     std::thread producer([&] {

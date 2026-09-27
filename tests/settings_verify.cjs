@@ -23,6 +23,8 @@ const output = path.resolve(__dirname, '../verification/settings');
             const game = {hash:'settings',code:'TEST',title:'Settings test',path:'test.gba',size:1024,play_seconds:0};
             const state = {loaded:false,running:false,fps:59.7,speed:1,base_speed:1,volume:.3,frame_skip:0,core:'mGBA',app_version:'test'};
             window.settingsRequests = [];
+            window.audioTestChannels = ['Speakers L','Speakers R','Headphones L','Headphones R'];
+            window.audioTestRevision = 1;
             window.nativeRequest = async cmd => {
                 window.settingsRequests.push(cmd);
                 let result = true;
@@ -32,6 +34,9 @@ const output = path.resolve(__dirname, '../verification/settings');
                     localStorage.setItem('settings-test', JSON.stringify(prefs));
                     result = prefs;
                 }
+                if (cmd.action === 'get_audio_outputs') result = {
+                    reaper_available:true,reaper_device:{IDENT_OUT:'Test audio interface',SRATE:'48000',running:true,channels:window.audioTestChannels},
+                    status:{audio_output:prefs.audio_output||'system',audio_track:prefs.audio_track||'preview',audio_channel:prefs.audio_channel||0,audio_mono:prefs.audio_mono===true,audio_error:'',audio_outputs_revision:window.audioTestRevision}};
                 if (cmd.action === 'get_emulator_state') result = state;
                 if (cmd.action === 'load_rom' || cmd.action === 'open_rom') result = {...state,loaded:true,running:true,game};
                 if (cmd.action === 'scan_roms') result = [game];
@@ -43,8 +48,34 @@ const output = path.resolve(__dirname, '../verification/settings');
         await page.waitForFunction(() => document.getElementById('about-version').textContent === 'test');
         await page.click('#settings-toggle');
         assert.equal(await page.locator('#volume').inputValue(), '30');
+        assert.equal(await page.locator('#audio-output').inputValue(),'system');
+        assert.equal(await page.locator('#audio-track-row').isVisible(),false);
+        for(const mode of ['reaper_output','system','reaper_track']){
+            await page.selectOption('#audio-output',mode);
+            await page.waitForFunction(mode=>JSON.parse(localStorage.getItem('settings-test')).audio_output===mode,mode);
+            await page.waitForFunction(()=>!document.getElementById('audio-output').disabled);
+            if(mode==='reaper_output'){
+                assert.equal(await page.locator('#audio-hardware-row').isVisible(),true);
+                assert.equal(await page.locator('#audio-channels option').count(),7);
+                await page.selectOption('#audio-channels','2:2');
+                await page.waitForFunction(()=>JSON.parse(localStorage.getItem('settings-test')).audio_channel===2&&!document.getElementById('audio-channels').disabled);
+                assert.match(await page.locator('#audio-device').textContent(),/Test audio interface.*48000 Hz/);
+                await page.evaluate(()=>{window.audioTestChannels=['Speakers L','Speakers R'];window.audioTestRevision++;onNativeState({audio_outputs_revision:window.audioTestRevision,audio_state:'channel_unavailable'});});
+                await page.waitForFunction(()=>document.querySelector('#audio-channels option:checked').textContent.includes('Unavailable'));
+                assert.equal(await page.locator('#audio-channels').inputValue(),'2:2','missing channels retained');
+                await page.evaluate(()=>{window.audioTestChannels=['Speakers L','Speakers R','Headphones L','Headphones R'];window.audioTestRevision++;onNativeState({audio_outputs_revision:window.audioTestRevision});});
+                await page.waitForFunction(()=>!document.querySelector('#audio-channels option:checked').textContent.includes('Unavailable'));
+                await page.selectOption('#audio-channels','3:1');
+                await page.waitForFunction(()=>JSON.parse(localStorage.getItem('settings-test')).audio_mono===true&&!document.getElementById('audio-channels').disabled);
+            }else assert.equal(await page.locator('#audio-hardware-row').isVisible(),false);
+        }
+        assert.equal(await page.locator('#audio-track-row').isVisible(),true);
+        await page.selectOption('#audio-track','selected');
+        await page.waitForFunction(()=>JSON.parse(localStorage.getItem('settings-test')).audio_track==='selected');
         const defaults = ['J','K','Space','Return','D','A','W','S','Q','O','L'];
         assert.deepEqual(await page.locator('#keys button').allTextContents(),defaults);
+        await page.selectOption('#audio-output','reaper_output');
+        await page.waitForFunction(()=>!document.getElementById('audio-output').disabled);
         const sizes = [[240,500],[298,1299],[320,500],[400,600],[440,900],[760,1200],
             [1280,540],[1600,900],[1920,400],[1920,2000]];
         const results = [];
@@ -69,6 +100,8 @@ const output = path.resolve(__dirname, '../verification/settings');
             }
         }
         assert.equal(await page.locator('#reset-keys + h3').textContent(), 'BIOS (optional)');
+        await page.selectOption('#audio-output','reaper_track');
+        await page.waitForFunction(()=>!document.getElementById('audio-output').disabled);
         for (const shader of ['lcd3x','lcd-grid-v2','none','lcd-grid-v2']) {
             await page.selectOption('#shader', shader);
             await page.waitForFunction(value => JSON.parse(localStorage.getItem('settings-test')).shader === value, shader);
@@ -78,6 +111,9 @@ const output = path.resolve(__dirname, '../verification/settings');
         await page.waitForFunction(() => document.getElementById('about-version').textContent === 'test');
         await page.click('#settings-toggle');
         assert.equal(await page.locator('#shader').inputValue(), 'lcd-grid-v2', 'preset restored on reopen');
+        assert.equal(await page.locator('#audio-output').inputValue(),'reaper_track','audio output restored');
+        assert.equal(await page.locator('#audio-track').inputValue(),'selected','target rule restored');
+        assert.equal(await page.locator('#audio-channels').inputValue(),'3:1','hardware output restored');
         assert.equal(await page.locator('#filter').isDisabled(), true);
         const custom = ['F','G','Left Shift','Return','Right','Left','Up','Down','U','I','P'];
         const presses = ['f','g','ShiftLeft','Enter','ArrowRight','ArrowLeft','ArrowUp','ArrowDown','u','i','p'];

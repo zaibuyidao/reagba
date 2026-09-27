@@ -57,7 +57,7 @@ struct Session {
         if (manager) manager->Shutdown();
         if (video && closeStream) closeStream(video);
         audio.reset(); commands.reset(); input.reset(); manager.reset();
-        if (sdl) SDL_QuitSubSystem(SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER);
+        if (sdl) SDL_QuitSubSystem(SDL_INIT_GAMECONTROLLER);
     }
 };
 std::unique_ptr<Session> session;
@@ -80,10 +80,10 @@ int Create(const char* directory) {
         if (!data.is_absolute()) throw std::runtime_error("Expected an absolute data directory");
         auto next = std::make_unique<Session>(++nextSession);
         SDL_SetMainReady();
-        if (SDL_InitSubSystem(SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER)) throw std::runtime_error(SDL_GetError());
+        if (SDL_InitSubSystem(SDL_INIT_GAMECONTROLLER)) throw std::runtime_error(SDL_GetError());
         next->sdl = true;
         next->manager = std::make_unique<EmulatorManager>(data / "roms", data);
-        next->audio = std::make_unique<AudioEngine>(*next->manager);
+        next->audio = std::make_unique<AudioEngine>(*next->manager, plugin->GetFunc);
         next->input = std::make_unique<InputManager>();
         next->commands = std::make_unique<CoreCommands>(*next->manager);
         if (webService) {
@@ -113,6 +113,13 @@ bool Request(int id, const char* text) {
         if (s.outstanding >= 128) throw std::runtime_error("Core reply queue is full; poll replies first");
         ++s.outstanding;
         try {
+            if (command["action"] == "get_audio_outputs") {
+                s.audio->Update();
+                std::lock_guard<std::mutex> lock(s.mutex);
+                s.replies.push_back({{"type", "reply"}, {"id", requestId}, {"action", command["action"]},
+                                     {"ok", true}, {"result", s.audio->Outputs()}});
+                return true;
+            }
             s.commands->Request(text, [&s, requestId, action = command["action"]](Json result) {
                 result["type"] = "reply"; result["id"] = requestId; result["action"] = action;
                 std::lock_guard<std::mutex> lock(s.mutex);
@@ -132,8 +139,9 @@ const char* Poll(int id) {
             result = std::move(s.replies.front()); s.replies.pop_front();
         }
         --s.outstanding;
+        s.audio->Update();
         if (result.value("ok", false) && result.contains("result") && result["result"].is_object() && result["result"].contains("loaded"))
-            result["result"]["audio_device"] = s.audio->Available();
+            result["result"].update(s.audio->Status());
         output = result.dump();
         if (output.size() > 8 * 1024 * 1024) {
             result.erase("result"); result["ok"] = false; result["error"] = "Core result exceeds 8 MiB";
@@ -198,6 +206,7 @@ void Tick() {
     RegisterWebService();
     if (!session) return;
     auto& s = *session;
+    s.audio->Update();
     {
         std::lock_guard<std::mutex> lock(s.mutex);
         for (auto it = s.largeReplies.begin(); it != s.largeReplies.end();)
@@ -265,11 +274,14 @@ int WebRequest(void*, uint64_t handle, uint64_t request, int window, const char*
         const auto alias = methods.find(name);
         command["action"] = name == "settings" ? (command.contains("settings") ? "set_settings" : "get_settings") :
                             alias == methods.end() ? name : alias->second;
-        const bool audioAvailable = session->audio->Available();
-        session->commands->Request(command.dump(), [handle, request, window, audioAvailable, owner = session.get()](Json reply) {
+        session->audio->Update();
+        if (command["action"] == "get_audio_outputs")
+            return completeCall(handle, request, session->audio->Outputs().dump().c_str(), REAWEB_OK, nullptr);
+        const auto audioStatus = session->audio->Status();
+        session->commands->Request(command.dump(), [handle, request, window, audioStatus, owner = session.get()](Json reply) {
             if (reply.value("ok", false)) {
                 auto result = reply.value("result", Json());
-                if (result.is_object() && result.contains("loaded")) result["audio_device"] = audioAvailable;
+                if (result.is_object() && result.contains("loaded")) result.update(audioStatus);
                 auto encoded = result.dump();
                 if (encoded.size() > 8 * 1024 * 1024) {
                     completeCall(handle, request, nullptr, REAWEB_SERVICE_ERROR, "Core result exceeds 8 MiB"); return;

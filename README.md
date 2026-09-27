@@ -33,7 +33,17 @@ reagba/web/
 
 默认按键：W/S/A/D 为方向，J/K 为 A/B，Q/O 为 R/L，回车为 Start，空格为 Select；按住 L 临时 4× 加速。支持自定义按键和 SDL GameController。编辑搜索、设置或失焦时释放游戏输入。默认音量 30%。
 
-保留暂停/继续、重置、停止、1×/2×/4×、音量、跳帧、九个即时存档槽、电池存档、BMP 截图、最近游玩和可选封面下载。支持整数缩放、最近邻/线性过滤、LCD3X 和 lcd-grid-v2；显示和 Shader 在 WebView 内执行，PCM 仍由核心的 SDL 音频设备输出。
+保留暂停/继续、重置、停止、1×/2×/4×、音量、跳帧、九个即时存档槽、电池存档、BMP 截图、最近游玩和可选封面下载。支持整数缩放、最近邻/线性过滤、LCD3X 和 lcd-grid-v2。显示和 Shader 在 WebView 内执行。
+
+设置中的“音频输出”提供三种模式，选择保存在核心配置中：
+
+- **系统默认设备（System default device）**：默认兼容模式，通过 SDL 直接使用系统默认音频设备。
+- **REAPER 硬件输出（REAPER hardware output）**：从 REAPER 当前设备中选择立体声通道对或单声道输出，默认通道 1/2。不经过 Master FX 与 Master 音量。
+- **REAPER 轨道（REAPER track）**：音频进入当前工程的目标轨道，经过 FX、音量、Pan、Routing 和 Mute/Solo。默认使用第一条名为 `ReaGBA Preview` 的轨道，没有同名轨道时使用第一条选中轨道。也可选择始终跟随第一条选中轨道。没有目标时保持静音，不创建轨道。
+
+两种 REAPER 模式均由 REAPER 音频引擎拉取 PCM，不单独打开系统音频设备，也不添加 FX。切换模式、轨道或工程时释放旧输出并重新绑定。暂停、停止和加速时保持静音。REAPER 的音频设备需处于运行状态，这些模式用于实时预听，不会创建可离线渲染的媒体。
+
+硬件设备、采样率和设备缓冲由 REAPER 管理。输出通道按当前设备的通道序号保存，列表随设备配置更新。所选通道不可用时保留设置并静音，恢复后自动重连。三种模式均自动校正长期时钟漂移，欠载后重新预缓冲，中断恢复时丢弃过期音频。无需手动设置重采样率。轨道 FX 和硬件缓冲仍会增加预听延迟。
 
 Windows、macOS 和 Linux 的核心数据统一位于 `<REAPER 资源目录>/Scripts/zaibuyidao Scripts/Modules/ReaGBA`，包含 `config/`、`cache/`、`saves/`、`screenshots/`、`states/` 和默认游戏目录 `roms/`。升级时将旧目录中的数据移至此处，将 `ROM/` 改名为 `roms/`，如已选择的游戏目录发生变化，请在设置中重新选择。WebView 的显示偏好通过 ReaWebAPI 写入 `config/ui.json`，首次使用会读取旧 `preferences.json` 中的显示偏好。窗口与浏览器数据由 ReaWebAPI 管理，旧宿主的 `window.json` 不再使用。
 
@@ -45,7 +55,7 @@ Windows、macOS 和 Linux 的核心数据统一位于 `<REAPER 资源目录>/Scr
 python scripts/build.py
 ```
 
-生成的 DLL 位于 `build/native/bin/Release/reaper_reagba-x64.dll`，安装组件和平台安装包只向 `UserPlugins` 安装核心二进制。`ReaGBA-ReaPack-v0.1.1.zip` 的 `ReaGBA/` 下包含 `extension/`、`web/` 和 `ReaGBA.ext`。界面在本仓库 `web/` 维护，不需要重新编译核心即可修改界面。
+生成的 DLL 位于 `build/native/bin/Release/reaper_reagba-x64.dll`，安装组件和平台安装包只向 `UserPlugins` 安装核心二进制。`ReaGBA-ReaPack-v0.1.2.zip` 的 `ReaGBA/` 下包含 `extension/`、`web/` 和 `ReaGBA.ext`。界面在本仓库 `web/` 维护，不需要重新编译核心即可修改界面。
 
 Linux 构建依赖为 C/C++ 工具链、CMake、pkg-config、SDL 音频/手柄所需开发库和 libcurl，不再要求 WebKitGTK。macOS 的 Objective-C/SWELL 支持仅用于 SDL 和 REAPER SDK 兼容，不包含窗口宿主。
 

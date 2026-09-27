@@ -73,6 +73,11 @@ def call(method,data=None):
 try:
  assert entry(None,C.byref(info))==1;C.CFUNCTYPE(None)(registered['timer'])();assert service
  call('getState')
+ outputs=call('get_audio_outputs');assert outputs['reaper_available'] is False and outputs['status']['audio_output']=='system'
+ call('setSettings',{'settings':{'audio_output':'reaper_output'}})
+ outputs=call('get_audio_outputs');assert outputs['status']['audio_device'] is False and outputs['status']['audio_error']
+ call('setSettings',{'settings':{'audio_output':'system','audio_track':'selected'}})
+ outputs=call('get_audio_outputs');assert outputs['status']['audio_device'] is True and outputs['status']['audio_track']=='selected'
  cache=a.output/'Scripts/zaibuyidao Scripts/Modules/ReaGBA/cache/covers';cache.mkdir(parents=True,exist_ok=True)
  def png_chunk(kind,data):return struct.pack('>I',len(data))+kind+data+struct.pack('>I',zlib.crc32(kind+data))
  pixels=random.Random(0).randbytes(512*400*4)
