@@ -86,6 +86,9 @@ static void SelfTest() {
         Call(manager, {{"action", "set_speed"}, {"value", 1}});
         Require(settings.at("auto_download_covers")==false,"Covers must default to offline");
         Require(settings.at("keys")==DefaultKeys() && settings.at("fast_forward_key")=="L","Default keyboard mismatch");
+        Require(settings.at("turbo_keys") == Json::array({"", ""}), "Turbo keys default to unbound");
+        Require(!Call(manager, {{"action","set_settings"},{"settings",{{"turbo_keys",Json::array({"H"})}}}}).value("ok",true), "Invalid turbo keys accepted");
+        Require(Call(manager, {{"action","set_settings"},{"settings",{{"turbo_keys",Json::array({"H", "V"})}}}}).value("ok",false), "Turbo keys rejected");
         Require(std::abs(manager.volume.load()-.3f)<.0001f,"Volume must default to 30 percent");
         auto customKeys=DefaultKeys();customKeys[0]="F";customKeys[8]="E";
         Require(Call(manager,{{"action","set_settings"},{"settings",{{"keys",customKeys},{"fast_forward_key","R"}}}}).value("ok",false),"Custom keys rejected");
@@ -102,6 +105,7 @@ static void SelfTest() {
         auto instance=std::make_unique<EmulatorManager>(defaultROM,data);
         auto &manager=*instance;
         const auto settings=Call(manager,{{"action","get_settings"}}).at("result");
+        Require(settings.at("turbo_keys") == Json::array({"H", "V"}), "Turbo keys not restored");
         Require(settings.at("gamepad_bindings").at("x") == Json({{"target","a"},{"mode","hold"}}), "Legacy gamepad binding not restored with standard behavior");
         Require(settings.at("gamepad_bindings").at("y") == Json({{"target","b"},{"mode","turbo"}}), "Turbo gamepad binding not restored");
         Require(settings.at("gamepad_bindings").at("button:40").at("target") == "l", "Raw button code not restored");

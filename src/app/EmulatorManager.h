@@ -29,6 +29,7 @@ class EmulatorManager {
         gamepadInput_ = raw;
         gamepadRawInputs_ = std::move(inputs);
     }
+    void SetTurboInput(uint32_t mask) { turboKeys_.store(mask & 3); }
     void SetFastForward(bool held) { fastForward_.store(held); }
     FrameBuffer frames;
     AudioBuffer audio;
@@ -51,11 +52,11 @@ class EmulatorManager {
     bool quit_ = false;
     mutable std::mutex audioOutputMutex_;
     AudioOutput audioOutput_;
-    std::atomic<uint32_t> keys_{0};
+    std::atomic<uint32_t> keys_{0}, turboKeys_{0};
     std::mutex gamepadMutex_;
     uint32_t gamepadInput_ = 0;
     std::vector<std::string> gamepadRawInputs_;
-    GamepadBindings gamepad_;
+    GamepadBindings gamepad_, keyboardTurbo_;
     std::atomic<bool> fastForward_{false};
     bool gamepadFastForward_ = false;
     uint32_t appliedInput_ = 0, observedInput_ = 0;

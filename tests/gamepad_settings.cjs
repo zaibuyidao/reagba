@@ -26,7 +26,7 @@ function runtimeFixture(id){
   const context=await browser.newContext(),requests=[],errors=[];
   let nextId=1,child,ownerOpen=true,failOpen=false,failSave=false,ignoreSave=false,prefs={language:'en'},opens=0;
   let controller={connected:true,instance:9,inputs:[],aliases:{}};
-  const state={loaded:false,running:false,speed:1,base_speed:1,volume:.3,app_version:'0.1.6'};
+  const state={loaded:false,running:false,speed:1,base_speed:1,volume:.3,app_version:'0.1.7'};
   async function open(file){
    const page=await context.newPage(),id=nextId++;
    page.on('pageerror',error=>errors.push(error.message));
@@ -51,7 +51,7 @@ function runtimeFixture(id){
    return {page,id};
   }
   const main=await open('index.html'),page=main.page;
-  await page.waitForFunction(()=>document.getElementById('about-version').textContent==='0.1.6');
+  await page.waitForFunction(()=>document.getElementById('about-version').textContent==='0.1.7');
   await page.click('#settings-toggle');
   let gamepad=page,childId=main.id;
   const show=async()=>{await page.reload();await page.waitForFunction(()=>document.querySelectorAll('#gamepad-bindings .gamepad-action').length===13);await page.click('#settings-toggle');return page;};
@@ -70,7 +70,8 @@ function runtimeFixture(id){
   assert.equal(await gamepad.locator('#gamepad-bindings button').count(),13,'no add or remove buttons');
   assert.equal(await gamepad.locator('#gamepad-bindings select').count(),0,'no preset input or trigger mode dropdown');
   assert.equal(await gamepad.locator('#gamepad-bindings input[type=checkbox]').count(),0,'no Turbo checkboxes');
-  assert.deepEqual((await gamepad.locator('.gamepad-target').allTextContents()).slice(0,4),['A','B','A Turbo','B Turbo']);
+  assert.deepEqual((await gamepad.locator('.gamepad-target').allTextContents()).slice(0,12),['A','B','A Turbo','B Turbo','Select','Start','Up','Down','Left','Right','L','R']);
+  assert.equal(await gamepad.locator('#gamepad-bindings').evaluate(e=>/[↑↓←→]/.test(e.textContent)),false);
   await bind('a','button:40',{'button:40':['x']});
   await bind('b','button:41',{'button:41':['y']});
   await bind('a_turbo','button:45');

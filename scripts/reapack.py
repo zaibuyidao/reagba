@@ -7,9 +7,8 @@ PLATFORM_IDS={'windows-x64':'win64','macos-x86_64':'darwin64','macos-arm64':'dar
 BASE_URL='https://raw.githubusercontent.com/zaibuyidao/ReaScripts/$commit/Modules/ReaGBA'
 WEB_FILES=('zaibuyidao_ReaGBA.lua','index.html','style.css','i18n.js','app.js','bridge.js','video.js','popout.js','game.html','game.js','gamepad.js')
 CHANGELOG=(
-    'Move gamepad bindings into Settings with compact two-column controls, separately assignable A/B Turbo actions and configurable hold-to-fast-forward.',
-    'Add Ctrl+1 through Ctrl+9 to save states and Shift+1 through Shift+9 to load states in both game windows.',
-    'Rename ROM folder to Game folder and populate the default Modules/ReaGBA/roms path on first use.',
+    'Align keyboard and gamepad binding layouts: Up/Down/Left/Right text labels, L before R, and no direction arrows.',
+    'Add independently configurable A/B Turbo keyboard bindings with saved settings and native 10 Hz repeat.',
 )
 
 def sources():

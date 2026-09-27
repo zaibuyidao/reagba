@@ -109,6 +109,34 @@ try:
   while call('getState')['input_mask']!=mask:
    assert time.monotonic()<deadline,'Input was not consumed by the emulator'
    time.sleep(.002)
+ def send_input(mask=0,turbo=0,active=True):
+  assert service.request(None,1,0,1,b'input',json.dumps({'mask':mask,'turbo':turbo,'active':active}).encode())==0
+ def wait_input(expected,reason):
+  deadline=time.monotonic()+.5
+  while call('getState')['core_input_mask']!=expected:
+   assert time.monotonic()<deadline,reason
+   time.sleep(.004)
+ def sample_input(mask,turbo,speed=1):
+  call('set_speed',{'value':speed});send_input(mask,turbo)
+  until=time.monotonic()+.42;states=[];refresh=time.monotonic()
+  while time.monotonic()<until:
+   if time.monotonic()-refresh>.15:send_input(mask,turbo);refresh=time.monotonic()
+   states.append(call('getState')['core_input_mask']);time.sleep(.004)
+  return states
+ for turbo in (1,2,3):
+  send_input();time.sleep(.03)
+  values=sample_input(0,turbo)
+  assert set(values)=={0,turbo},(turbo,values)
+  assert sum(a!=b for a,b in zip(values,values[1:]))>=5,'Turbo did not repeat'
+ values=sample_input(1,1);assert all(value==1 for value in values[5:]),'Turbo released ordinary held A'
+ send_input();time.sleep(.03)
+ values=sample_input(0,1,4);assert set(values)=={0,1},'Fast-forward lost keyboard Turbo'
+ call('set_speed',{'value':1});send_input(turbo=3,active=False);time.sleep(.04)
+ wait_input(0,'Inactive keyboard Turbo stuck')
+ send_input(turbo=3);time.sleep(.85);C.CFUNCTYPE(None)(registered['timer'])();time.sleep(.04)
+ wait_input(0,'Timed-out keyboard Turbo stuck')
+ send_input(turbo=1);time.sleep(.03);send_input();time.sleep(.04)
+ wait_input(0,'Keyboard Turbo release stuck')
  call('pause');call('saveState',{'slot':1});call('loadState',{'slot':1});call('reset');call('closeRom');assert not call('getState')['loaded'];call('loadRom',{'path':str(a.rom.resolve())})
  # Closing the main native window destroys every audio mode even without JS cleanup.
  for mode in ['system','reaper_output','reaper_track']:
@@ -131,5 +159,5 @@ try:
  entry(None,None);before=frames;time.sleep(.1);assert not registered and not stream_open and frames==before
  assert events[-2:]==['close','unregister'],events
  assert not failures,failures
- print(json.dumps({'passed':True,'producerFps':fps,'checks':['service ABI','real ROM','input state','controls','large cover reply','save/load','main close in all audio modes','child close','reload','no late recreation','runtime-first shutdown','producer-first unload','no callbacks after close']}))
+ print(json.dumps({'passed':True,'producerFps':fps,'checks':['service ABI','real ROM','input state','keyboard A/B turbo and release','controls','large cover reply','save/load','main close in all audio modes','child close','reload','no late recreation','runtime-first shutdown','producer-first unload','no callbacks after close']}))
 finally:entry(None,None)

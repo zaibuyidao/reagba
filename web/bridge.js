@@ -134,9 +134,10 @@ function initReaGBABridge(){
   let mask=0;const keys=settings.keys||defaultKeys;
   if(active)for(let i=0;i<10;i++)if(pressed.has(keys[i]))mask|=1<<i;
   const fast=active&&pressed.has(settings.fast_forward_key||'L');
-  sendInput({mask,fast,active});
+  let turbo=0;if(active)(settings.turbo_keys||[]).forEach((key,i)=>{if(key&&pressed.has(key))turbo|=1<<i;});
+  sendInput({mask,fast,active,turbo});
  }
- function release(){pressed.clear();sendInput({mask:0,fast:false,active:false});}
+ function release(){pressed.clear();sendInput({mask:0,fast:false,active:false,turbo:0});}
  let slotBusy=false;
  async function slotShortcut(slot,save){
   slotBusy=true;
@@ -156,7 +157,7 @@ function initReaGBABridge(){
    return;
   }
   const key=keyName(event.code);
-  if(!(settings.keys||defaultKeys).includes(key)&&key!==(settings.fast_forward_key||'L'))return;
+  if(!(settings.keys||defaultKeys).includes(key)&&key!==(settings.fast_forward_key||'L')&&!(settings.turbo_keys||[]).includes(key))return;
   event.preventDefault();if(pressed.has(key))return;pressed.add(key);input();
  });
  document.addEventListener('keyup',event=>{const key=keyName(event.code);if(pressed.delete(key)){event.preventDefault();input();}});

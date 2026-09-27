@@ -1,7 +1,8 @@
 'use strict';
 const gamepadSources=['a','b','x','y','back','guide','start','leftstick','rightstick','leftshoulder','rightshoulder','dpup','dpdown','dpleft','dpright','touchpad','leftup','leftdown','leftleft','leftright','rightup','rightdown','rightleft','rightright','lefttrigger','righttrigger'];
 const gamepadTargets=['a','b','select','start','right','left','up','down','r','l','fast_forward'];
-const gamepadActions=['a','b','a_turbo','b_turbo',...gamepadTargets.slice(2)];
+const gamepadActions=['a','b','a_turbo','b_turbo','select','start','up','down','left','right','l','r','fast_forward'];
+function actionLabel(action){return action==='fast_forward'?t('holdFast'):action.endsWith('_turbo')?action[0].toUpperCase()+' '+t('gamepad_turbo'):labels[gamepadTargets.indexOf(action)];}
 const actionBinding=action=>({target:action.replace(/_turbo$/,''),mode:action.endsWith('_turbo')?'turbo':'hold'});
 function actionEntries(bindings,action){const binding=actionBinding(action);return Object.entries(bindings).filter(([,value])=>value.target===binding.target&&value.mode===binding.mode);}
 const gamepadDefaultTargets=['a','b','none','none','select','none','start','none','none','l','r','up','down','left','right','none','up','down','left','right','none','none','none','none','none','none'];
@@ -10,14 +11,14 @@ let gamepadSaving=false,capture=null,captureTimer=null;
 function sourceLabel(source){
  if(source.startsWith('button:'))return t('gamepadButton',{code:source.slice(7)});
  if(source.startsWith('axis:')){const [,code,direction]=source.split(':');return t('gamepadAxis',{code,direction});}
- if(source.startsWith('hat:')){const [,code,direction]=source.split(':');return t('gamepadHat',{code,direction:{1:'↑',2:'→',4:'↓',8:'←'}[direction]});}
+ if(source.startsWith('hat:')){const [,code,direction]=source.split(':');return t('gamepadHat',{code,direction:{1:'Up',2:'Right',4:'Down',8:'Left'}[direction]});}
  return t(`pad_${source}`);
 }
 function allBindings(){return {...defaultGamepadBindings(),...settings.gamepad_bindings};}
 function renderGamepad(){
  const bindings=allBindings();$('gamepad-bindings').replaceChildren();
  for(const target of gamepadActions){
-  const row=make('div','key-pair gamepad-action'),name=target==='fast_forward'?t('holdFast'):target.endsWith('_turbo')?target[0].toUpperCase()+' '+t('gamepad_turbo'):labels[gamepadTargets.indexOf(target)],entries=actionEntries(bindings,target);
+  const row=make('div','key-pair gamepad-action'),name=actionLabel(target),entries=actionEntries(bindings,target);
   const listening=capture?.target===target,caption=listening?t('pressKey'):entries.map(([source])=>sourceLabel(source)).join(' / ')||t('gamepadBind');
   const entry=make('div','gamepad-binding'),button=make('button','gamepad-source',caption);
   button.disabled=gamepadSaving||!!capture;button.dataset.target=target;button.setAttribute('aria-label',name+' · '+caption);button.onclick=run(()=>startCapture(target));

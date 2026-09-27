@@ -38,6 +38,12 @@ const flush=async()=>{for(let i=0;i<30;i++)await Promise.resolve();};
  for(const childWindow of [false,true]){
   const shortcuts=fixture(childWindow);await flush();shortcuts.context.state.loaded=true;
   shortcuts.context.i18n={number:String,error:value=>value};shortcuts.context.t=key=>key;
+  shortcuts.context.settings.turbo_keys=['H','V'];
+  shortcuts.events['dom:keydown']({code:'KeyH',preventDefault(){}});assert.equal(shortcuts.sent.at(-1).payload.turbo,1);assert.equal(shortcuts.sent.at(-1).payload.mask,0);
+  shortcuts.events['dom:keydown']({code:'KeyV',preventDefault(){}});assert.equal(shortcuts.sent.at(-1).payload.turbo,3);
+  shortcuts.events['dom:keydown']({code:'KeyJ',preventDefault(){}});assert.equal(shortcuts.sent.at(-1).payload.mask,1);assert.equal(shortcuts.sent.at(-1).payload.turbo,3);
+  shortcuts.events['dom:keyup']({code:'KeyH',preventDefault(){}});assert.equal(shortcuts.sent.at(-1).payload.turbo,2);
+  shortcuts.events.blur();assert.equal(shortcuts.sent.at(-1).payload.turbo,0);assert.equal(shortcuts.sent.at(-1).payload.mask,0);
   const selected=[];shortcuts.window.onStateSlot=async slot=>selected.push(slot);
   for(let slot=1;slot<=9;slot++)for(const save of [true,false]){
    let prevented=false;

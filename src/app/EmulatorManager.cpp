@@ -30,6 +30,7 @@ EmulatorManager::EmulatorManager(fs::path romDir, fs::path dataDir)
         preferences_["gamepad_bindings"] = DefaultGamepadBindings();
     }
     gamepad_.Configure(preferences_["gamepad_bindings"]);
+    keyboardTurbo_.Configure({{"a", {{"target", "a"}, {"mode", "turbo"}}}, {"b", {{"target", "b"}, {"mode", "turbo"}}}});
     const auto mode = preferences_.value("audio_output", Json());
     if (mode != "system" && mode != "reaper_output" && mode != "reaper_track") preferences_["audio_output"] = "system";
     const auto track = preferences_.value("audio_track", Json());
@@ -129,10 +130,16 @@ Json EmulatorManager::Handle(const Json &cmd) {
             if (settings.contains(key) &&
                 (!settings[key].is_string() || settings[key].get<std::string>().empty()))
                 throw std::runtime_error("ROM directories must be non-empty paths");
+        if (settings.contains("turbo_keys")) {
+            auto normalized = settings;
+            NormalizeKeys(normalized);
+            if (normalized["turbo_keys"] != settings["turbo_keys"])
+                throw std::runtime_error("Invalid turbo key bindings");
+        }
         if (settings.contains("gamepad_bindings"))
             settings["gamepad_bindings"] = NormalizeGamepadBindings(settings["gamepad_bindings"]);
         for (auto it = settings.begin(); it != settings.end(); ++it)
-            if (it.key() == "gamepad_bindings" || it.key() == "keys" || it.key() == "bios" || it.key() == "fast_forward_key" ||
+            if (it.key() == "gamepad_bindings" || it.key() == "turbo_keys" || it.key() == "keys" || it.key() == "bios" || it.key() == "fast_forward_key" ||
                 it.key() == "rom_directory" || it.key() == "last_rom_directory" || it.key() == "auto_download_covers" ||
                 it.key() == "audio_output" || it.key() == "audio_track" || it.key() == "audio_channel" || it.key() == "audio_mono")
                 preferences_[it.key()] = it.value();
@@ -255,6 +262,8 @@ void EmulatorManager::Run() {
             gamepadKeys = gamepad_.Apply(gamepadInput_,
                 std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now().time_since_epoch()).count(), gamepadRawInputs_);
         }
+        const auto turboKeys = keyboardTurbo_.Apply(turboKeys_.load(),
+            std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now().time_since_epoch()).count());
         gamepadFastForward_ = (gamepadKeys & GamepadFastForwardMask) != 0;
         for (auto &request : requests) {
             try {
@@ -272,7 +281,7 @@ void EmulatorManager::Run() {
             continue;
         }
         try {
-            appliedInput_ = keys_.load() | (gamepadKeys & 1023);
+            appliedInput_ = keys_.load() | turboKeys | (gamepadKeys & 1023);
             if ((appliedInput_ & 0x30) == 0x30) appliedInput_ &= ~0x30u;
             if ((appliedInput_ & 0xc0) == 0xc0) appliedInput_ &= ~0xc0u;
             core_->SetInput(appliedInput_);

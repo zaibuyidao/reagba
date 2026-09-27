@@ -52,7 +52,7 @@ struct Session {
     std::map<std::string, LargeReply> largeReplies;
     size_t largeReplyBytes = 0;
     size_t outstanding = 0;
-    uint32_t held = 0, pressed = 0;
+    uint32_t held = 0, pressed = 0, turbo = 0;
     bool fast = false, fastPressed = false, active = false, hasFrame = false;
     Clock::time_point inputTime{};
     explicit Session(int value) : id(value) {}
@@ -197,7 +197,7 @@ bool SetInput(int id, int mask, bool fast, bool active) {
     return Guard([&] {
         auto& s = Get(id);
         if (mask < 0 || mask > 1023) throw std::runtime_error("Invalid GBA input mask");
-        s.inputTime = Clock::now(); s.active = active;
+        s.inputTime = Clock::now(); s.active = active; s.turbo = 0;
         if (!active) { s.held = s.pressed = 0; s.fast = s.fastPressed = false; }
         else {
             s.pressed |= unsigned(mask) & ~s.held; s.held = unsigned(mask);
@@ -228,6 +228,7 @@ void Tick() {
     if ((mask & 0x30) == 0x30) mask &= ~0x30u;
     if ((mask & 0xc0) == 0xc0) mask &= ~0xc0u;
     s.manager->SetInput(mask);
+    s.manager->SetTurboInput(active ? s.turbo : 0);
     const auto gamepad = s.input->PollGamepad(active);
     s.manager->SetGamepadInput(gamepad, active ? s.input->RawGamepadInputs() : std::vector<std::string>{});
     s.manager->SetFastForward(active && (s.fast || s.fastPressed));
@@ -262,10 +263,13 @@ int WebRequest(void*, uint64_t handle, uint64_t request, int window, const char*
         }
         if (name == "input") {
             if (!session) return REAWEB_SERVICE_ERROR;
-            const auto mask = command.value("mask", 0);
+            const auto mask = command.value("mask", 0), turbo = command.value("turbo", 0);
+            if (turbo < 0 || turbo > 3) return REAWEB_INVALID_ARGUMENT;
             const auto fast = command.value("fast", false), active = command.value("active", true);
             if (!SetInput(session->id, mask, fast, active)) return REAWEB_INVALID_ARGUMENT;
             session->pressed = 0; session->fastPressed = false;
+            session->turbo = active ? unsigned(turbo) : 0;
+            session->manager->SetTurboInput(session->turbo);
             auto keys = active ? unsigned(mask) : 0;
             if ((keys & 0x30) == 0x30) keys &= ~0x30u;
             if ((keys & 0xc0) == 0xc0) keys &= ~0xc0u;
