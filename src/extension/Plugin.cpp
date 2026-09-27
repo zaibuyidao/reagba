@@ -228,7 +228,8 @@ void Tick() {
     if ((mask & 0x30) == 0x30) mask &= ~0x30u;
     if ((mask & 0xc0) == 0xc0) mask &= ~0xc0u;
     s.manager->SetInput(mask);
-    s.manager->SetGamepadInput(s.input->PollGamepad(active));
+    const auto gamepad = s.input->PollGamepad(active);
+    s.manager->SetGamepadInput(gamepad, active ? s.input->RawGamepadInputs() : std::vector<std::string>{});
     s.manager->SetFastForward(active && (s.fast || s.fastPressed));
     s.pressed = 0; s.fastPressed = false;
 }
@@ -254,6 +255,11 @@ int WebRequest(void*, uint64_t handle, uint64_t request, int window, const char*
         }
         // Late polling/input from a closing popout cannot recreate the core.
         if (!session || !session->windows.count(window)) throw std::runtime_error("ReaGBA window is not attached");
+        if (name == "get_gamepad_input") {
+            if (!request) return REAWEB_INVALID_ARGUMENT;
+            session->input->PollGamepad(false);
+            return completeCall(handle, request, session->input->GamepadState().dump().c_str(), REAWEB_OK, nullptr);
+        }
         if (name == "input") {
             if (!session) return REAWEB_SERVICE_ERROR;
             const auto mask = command.value("mask", 0);

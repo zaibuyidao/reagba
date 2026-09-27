@@ -68,12 +68,14 @@ WebView 使用 WebGL2 显示、整数缩放及原有 LCD 效果公式。参考�
 
 ## 手柄绑定
 
-`InputManager` 使用 SDL GameController 轮询标准按键、摇杆方向和扳机，轴阈值为 16000。宿主 timer 向 `EmulatorManager` 传递原始输入位，工作线程每个游戏帧执行 `GamepadBindings` 后与键盘输入合并，对向方向同时按下时抵消。单次模式仅输出一帧，连发使用单调时钟，周期 100 ms、占空比 50%。断开连接、失焦或输入超时将原始输入清零。
+`web/gamepad.html` 是独立的手柄设置页，主设置页只保留打开入口。每个 GBA 操作对应一个绑定按钮，点击后监听输入，成功录入时替换该目标的原有绑定。默认方向键与左摇杆绑定合并显示。设置页以非所有者身份连接现有核心会话，复用设置接口，不打开视频流，也不发送游戏输入。关闭设置窗口不停止游戏，主会话关闭后设置窗口自动关闭。
 
-`get_settings` / `set_settings` 复用 `gamepad_bindings` 字段，不新增服务方法。字段为以输入 ID 为键的对象，每项包含 `target` 和 `mode`。目标值为 `a/b/select/start/right/left/up/down/r/l/none`，模式为 `hold/turbo/single`。源 ID 见 `src/input/GamepadBindings.h`。提交该字段会替换整套绑定，缺省项补默认值，非法源、目标及模式被拒绝。未提交该字段时保留现有配置。启动时缺失或非法配置回退默认值。
+`InputManager` 同时读取 SDL Joystick 的原始按钮、轴和方向帽，对有标准映射的设备保留 GameController 默认绑定，轴阈值为 16000。宿主 timer 向 `EmulatorManager` 传递标准输入位及原始输入码，工作线程每个游戏帧执行 `GamepadBindings` 后与键盘输入合并，对向方向同时按下时抵消。普通绑定保持按下状态，连发使用单调时钟，周期 100 ms、占空比 50%。断开连接、失焦或输入超时将原始输入清零。
 
-例如将 X 设为单次 A、Y 设为连发 B，其余输入保留默认值：
+`get_settings` / `set_settings` 复用 `gamepad_bindings` 字段。只读 Native Service 方法 `get_gamepad_input` 返回连接状态、设备名、实例 ID、当前原始输入码及对应的标准映射别名，供设置页录入。该方法在主线程轮询，不发送游戏输入。字段为以输入 ID 为键的对象，每项包含 `target` 和 `mode`。目标值为 `a/b/select/start/right/left/up/down/r/l/none`，模式为 `hold/turbo`，Turbo 仅用于 GBA A/B/L/R 目标。旧 `single` 配置及非动作键的 Turbo 配置兼容读取并归一为 `hold`，保留源和目标。源 ID 支持 `button:<index>`、`axis:<index>:+/-`、`hat:<index>:1/2/4/8`，编号从 0 开始。标准默认源 ID 见 `src/input/GamepadBindings.h`。录入原始输入时，设置页清除同一实体输入的标准别名绑定，避免触发双重操作。提交该字段会替换整套绑定，缺省项补默认值，非法源、目标及模式被拒绝。未提交该字段时保留现有配置。启动时缺失或非法配置回退默认值。
+
+例如将原始按钮 40 设为标准 A、按钮 41 设为连发 B，其余输入保留默认值：
 
 ```json
-{"action":"set_settings","settings":{"gamepad_bindings":{"x":{"target":"a","mode":"single"},"y":{"target":"b","mode":"turbo"}}}}
+{"action":"set_settings","settings":{"gamepad_bindings":{"button:40":{"target":"a","mode":"hold"},"button:41":{"target":"b","mode":"turbo"}}}}
 ```

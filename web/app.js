@@ -89,47 +89,7 @@ function renderSlots(){$('slots').replaceChildren();for(let n=1;n<=9;n++){const 
 const defaultKeys=['J','K','Space','Return','D','A','W','S','Q','O'];const labels=['A','B','Select','Start','→','←','↑','↓','R','L','holdFast'];
 function showKeyHint(){const keys=settings.keys||defaultKeys;toast(t('keyHint',{up:keys[6],down:keys[7],left:keys[5],right:keys[4],a:keys[0],b:keys[1],r:keys[8],l:keys[9],start:keys[3],select:keys[2],fast:settings.fast_forward_key||'L'}));}
 function renderKeys(){$('keys').replaceChildren();[...(settings.keys||defaultKeys),settings.fast_forward_key||'L'].forEach((key,i)=>{const row=make('div','key-pair');const b=make('button','',binding===i?t('pressKey'):key);b.onclick=()=>{binding=i;renderKeys();};row.append(make('span','',i===10?t('holdFast'):labels[i]),b);$('keys').append(row);});}
-const gamepadSources=['a','b','x','y','back','guide','start','leftstick','rightstick','leftshoulder','rightshoulder','dpup','dpdown','dpleft','dpright','touchpad','leftup','leftdown','leftleft','leftright','rightup','rightdown','rightleft','rightright','lefttrigger','righttrigger'];
-const gamepadTargets=['a','b','select','start','right','left','up','down','r','l'];
-const gamepadDefaultTargets=['a','b','none','none','select','none','start','none','none','l','r','up','down','left','right','none','up','down','left','right','none','none','none','none','none','none'];
-function defaultGamepadBindings(){return Object.fromEntries(gamepadSources.map((source,i)=>[source,{target:gamepadDefaultTargets[i],mode:'hold'}]));}
-let gamepadSaving=false;
-function renderGamepad(){
- const bindings={...defaultGamepadBindings(),...settings.gamepad_bindings};
- $('gamepad-bindings').replaceChildren();
- for(const source of gamepadSources){
-  const row=make('div','gamepad-binding'),name=t(`pad_${source}`);
-  row.append(make('span','gamepad-source',name));
-  for(const field of ['target','mode']){
-   const label=make('label',''),select=make('select','');
-   select.dataset.source=source;select.dataset.field=field;select.setAttribute('aria-label',name+' · '+t(field==='target'?'gamepadTarget':'gamepadMode'));select.disabled=gamepadSaving;
-   const values=field==='target'?['none',...gamepadTargets]:['hold','turbo','single'];
-   for(const value of values){const option=make('option','',field==='mode'?t(`gamepad_${value}`):value==='none'?t('gamepadNone'):labels[gamepadTargets.indexOf(value)]);option.value=value;select.append(option);}
-   select.value=bindings[source][field];
-   select.onchange=run(async()=>{
-    const next={...defaultGamepadBindings(),...settings.gamepad_bindings};
-    next[source]={...next[source],[field]:select.value};
-    await saveGamepad(next);
-   });
-   label.append(make('span','',t(field==='target'?'gamepadTarget':'gamepadMode')),select);row.append(label);
-  }
-  $('gamepad-bindings').append(row);
- }
- $('reset-gamepad').disabled=gamepadSaving;
-}
-async function saveGamepad(bindings){
- if(gamepadSaving)return;
- const focused=document.activeElement?.closest('#gamepad-bindings select'),source=focused?.dataset.source,field=focused?.dataset.field;
- gamepadSaving=true;renderGamepad();
- try{
-  await saveSettings({gamepad_bindings:bindings});
-  if(!gamepadSources.every(source=>['target','mode'].every(field=>settings.gamepad_bindings?.[source]?.[field]===bindings[source][field])))throw Error(t('gamepadSaveFailed'));
- }finally{
-  gamepadSaving=false;renderGamepad();
-  if(source&&document.activeElement===document.body)$('gamepad-bindings').querySelector(`select[data-source="${source}"][data-field="${field}"]`)?.focus({preventScroll:true});
- }
-}
-$('reset-gamepad').onclick=run(()=>saveGamepad(defaultGamepadBindings()));
+$('open-gamepad-settings').onclick=run(async()=>{const button=$('open-gamepad-settings');button.disabled=true;try{await call('gamepad_settings');}finally{button.disabled=false;}});
 async function saveSettings(values){settings=await call('set_settings',{settings:values});}
 let audioBusy=false,audioRefreshing=false,audioOutputs={};
 function renderAudio(){
@@ -285,7 +245,7 @@ function renderSettingsToggle(){const text=t($('settings-view').hidden?'settings
 function applyLanguage(value){
  i18n.set(value);document.documentElement.lang=i18n.language;i18n.apply();$('language').value=i18n.language;
  window.ReaGBAPopout?.render();
- renderSettingsToggle();renderAudio();renderGames();renderCoverStatus();renderKeys();renderGamepad();renderSlots();renderState(state);scheduleViewport();
+ renderSettingsToggle();renderAudio();renderGames();renderCoverStatus();renderKeys();renderSlots();renderState(state);scheduleViewport();
 }
 for(const [code,catalog] of Object.entries(i18n.catalogs)){const option=make('option','',catalog.name);option.value=code;option.lang=code;$('language').append(option);}
 $('language').onchange=run(async()=>{

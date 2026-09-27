@@ -41,9 +41,7 @@
   <p id="audio-device" class="hint" hidden></p>
   <p id="audio-status" class="hint" role="status" hidden></p>
   <label class="setting"><span data-i18n="volume">Volume</span><span id="volume-value">30%</span></label><input id="volume" type="range" min="0" max="100" value="30"><p class="hint" data-i18n="audioHint">Audio is muted during fast-forward and resumes at 1× speed.</p>
-  <h3 data-i18n="gamepadTitle">Gamepad bindings</h3><p class="hint" data-i18n="gamepadHint">Choose an action and trigger mode for each input. PS4 symbols are shown beside standard button names. Changes are saved automatically and shared by connected controllers.</p>
-  <p class="hint" data-i18n="gamepadModesHint">Hold keeps the action pressed until release. Turbo repeats 10 times per second. Single press lasts one game frame, then waits for release.</p>
-  <div id="gamepad-bindings" class="gamepad-grid"></div><button id="reset-gamepad" class="small" data-i18n="resetGamepad">Reset gamepad bindings</button>
+  <h3 data-i18n="gamepadTitle">Gamepad bindings</h3><button id="open-gamepad-settings" class="small" data-i18n="openGamepadSettings">Configure gamepad…</button>
   <h3 data-i18n="keyBindings">Keyboard controls</h3><p class="hint" data-i18n="keysHint">Click a key, then press its replacement. Press Esc to cancel.</p><div id="keys" class="key-grid"></div><button id="reset-keys" class="small" data-i18n="resetKeys">Reset controls</button>
   <h3 data-i18n="bios">BIOS (optional)</h3><input id="bios" type="text" placeholder="Full path to your own 16 KB GBA BIOS" data-i18n-placeholder="biosPlaceholder"><button id="save-bios" class="small" data-i18n="savePath">Save path</button><p class="hint" data-i18n="biosHint">Leave blank to use the built-in BIOS implementation. Takes effect the next time you load a game.</p>
   <div class="about"><b>ReaGBA <span id="about-version"></span></b><span data-i18n="aboutCore">mGBA 0.10.5 · GBA only</span></div>

@@ -258,8 +258,12 @@ void EmulatorManager::Run() {
         }
         const double speed = EffectiveSpeed();
         audible.store(running_ && speed == 1);
-        const auto gamepadKeys = gamepad_.Apply(gamepadInput_.load(),
-            std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now().time_since_epoch()).count());
+        uint32_t gamepadKeys;
+        {
+            std::lock_guard<std::mutex> lock(gamepadMutex_);
+            gamepadKeys = gamepad_.Apply(gamepadInput_,
+                std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now().time_since_epoch()).count(), gamepadRawInputs_);
+        }
         if (!running_ || !core_) {
             next = Clock::now();
             meter = next;

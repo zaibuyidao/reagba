@@ -5,10 +5,10 @@ import release
 CATEGORY='ReaGBA'
 PLATFORM_IDS={'windows-x64':'win64','macos-x86_64':'darwin64','macos-arm64':'darwin-arm64','linux-x86_64':'linux64','linux-aarch64':'linux-aarch64'}
 BASE_URL='https://raw.githubusercontent.com/zaibuyidao/ReaScripts/$commit/Modules/ReaGBA'
-WEB_FILES=('zaibuyidao_ReaGBA.lua','index.html','style.css','i18n.js','app.js','bridge.js','video.js','popout.js','game.html','game.js')
+WEB_FILES=('zaibuyidao_ReaGBA.lua','index.html','style.css','i18n.js','app.js','bridge.js','video.js','popout.js','game.html','game.js','gamepad.html','gamepad.js')
 CHANGELOG=(
-    'Add customizable gamepad bindings for GBA buttons, D-pad, sticks and triggers, with PS4 button labels.',
-    'Support hold, turbo and single-press modes per input, with saved bindings and a reset to defaults on Windows, macOS and Linux.',
+    'Add a separate gamepad settings window with press-to-bind capture for raw buttons, axes and hats, including controllers without standard mappings.',
+    'Simplify bindings to one click-to-listen button per GBA action, with standard behavior and optional Turbo for A/B/L/R.',
 )
 
 def sources():

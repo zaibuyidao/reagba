@@ -79,7 +79,10 @@ def call(method,data=None,window=1,error=False):
 try:
  assert entry(None,C.byref(info))==1;C.CFUNCTYPE(None)(registered['timer'])();assert service
  call('attach',{'owner':True})
- call('getState')
+ state_before=call('getState')
+ input_state=call('get_gamepad_input')
+ assert isinstance(input_state['connected'],bool) and isinstance(input_state['inputs'],list) and isinstance(input_state['aliases'],dict)
+ assert call('getState')['input_mask']==state_before['input_mask'],'capture changed gameplay input'
  outputs=call('get_audio_outputs');assert outputs['reaper_available'] is False and outputs['status']['audio_output']=='system'
  call('setSettings',{'settings':{'audio_output':'reaper_output'}})
  outputs=call('get_audio_outputs');assert outputs['status']['audio_device'] is False and outputs['status']['audio_error']

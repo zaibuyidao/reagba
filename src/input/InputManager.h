@@ -6,6 +6,9 @@
 namespace reagba {
 class InputManager {
     SDL_GameController *pad_ = nullptr;
+    SDL_Joystick* joystick_ = nullptr;
+    std::vector<std::string> rawInputs_;
+    Json gamepadState_ = {{"connected", false}, {"inputs", Json::array()}, {"aliases", Json::object()}};
     std::array<SDL_Scancode, 11> mapping_ = {
         SDL_SCANCODE_J, SDL_SCANCODE_K, SDL_SCANCODE_SPACE, SDL_SCANCODE_RETURN, SDL_SCANCODE_D,
         SDL_SCANCODE_A, SDL_SCANCODE_W, SDL_SCANCODE_S, SDL_SCANCODE_Q, SDL_SCANCODE_O, SDL_SCANCODE_L};
@@ -15,8 +18,8 @@ class InputManager {
     uint32_t lastScan_ = 0;
 
   public:
-    // Takes ownership when a controller is supplied (used by virtual-device tests).
-    explicit InputManager(SDL_GameController* pad = nullptr) : pad_(pad) {}
+    // Supplied SDL handles transfer ownership (used by virtual-device tests).
+    explicit InputManager(SDL_GameController* pad = nullptr, SDL_Joystick* joystick = nullptr) : pad_(pad), joystick_(joystick) {}
     ~InputManager();
     void Configure(const Json &);
     void Key(SDL_Scancode key, bool down) {
@@ -32,6 +35,8 @@ class InputManager {
     }
     uint32_t Poll(bool active);
     uint32_t PollGamepad(bool active);
+    const std::vector<std::string>& RawGamepadInputs() const { return rawInputs_; }
+    const Json& GamepadState() const { return gamepadState_; }
     bool FastForward() const { return fastForward_; }
     const std::array<SDL_Scancode, 11> &Mapping() const {
         return mapping_;

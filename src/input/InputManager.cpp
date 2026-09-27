@@ -1,8 +1,10 @@
 #include "input/InputManager.h"
+#include "input/GamepadBindings.h"
 namespace reagba {
 InputManager::~InputManager() {
     if (pad_)
         SDL_GameControllerClose(pad_);
+    if (joystick_) SDL_JoystickClose(joystick_);
 }
 void InputManager::Configure(const Json &config) {
     Clear();
@@ -41,17 +43,40 @@ uint32_t InputManager::PollGamepad(bool active) {
         SDL_GameControllerClose(pad_);
         pad_ = nullptr;
     }
+    if (joystick_ && !SDL_JoystickGetAttached(joystick_)) {
+        SDL_JoystickClose(joystick_);
+        joystick_ = nullptr;
+    }
     auto now = SDL_GetTicks();
-    if (!pad_ && now - lastScan_ > 1000) {
+    if (!pad_ && !joystick_ && now - lastScan_ > 1000) {
         lastScan_ = now;
-        for (int i = 0; i < SDL_NumJoysticks(); ++i)
-            if (SDL_IsGameController(i)) {
-                pad_ = SDL_GameControllerOpen(i);
-                break;
-            }
+        for (int i = 0; i < SDL_NumJoysticks(); ++i) {
+            if (SDL_IsGameController(i)) pad_ = SDL_GameControllerOpen(i);
+            else joystick_ = SDL_JoystickOpen(i);
+            if (pad_ || joystick_) break;
+        }
     }
     SDL_GameControllerUpdate();
-    if (!active || !pad_) return 0;
+    SDL_JoystickUpdate();
+    auto* joystick = pad_ ? SDL_GameControllerGetJoystick(pad_) : joystick_;
+    rawInputs_.clear();
+    gamepadState_ = {{"connected", joystick != nullptr}, {"inputs", Json::array()}, {"aliases", Json::object()}};
+    if (!joystick) return 0;
+    gamepadState_["name"] = SDL_JoystickName(joystick) ? SDL_JoystickName(joystick) : "";
+    gamepadState_["instance"] = SDL_JoystickInstanceID(joystick);
+    for (int i = 0; i < SDL_JoystickNumButtons(joystick); ++i)
+        if (SDL_JoystickGetButton(joystick, i)) rawInputs_.push_back("button:" + std::to_string(i));
+    for (int i = 0; i < SDL_JoystickNumAxes(joystick); ++i) {
+        auto value = SDL_JoystickGetAxis(joystick, i);
+        if (value < -16000) rawInputs_.push_back("axis:" + std::to_string(i) + ":-");
+        if (value > 16000) rawInputs_.push_back("axis:" + std::to_string(i) + ":+");
+    }
+    for (int i = 0; i < SDL_JoystickNumHats(joystick); ++i)
+        for (int direction : {1, 2, 4, 8})
+            if (SDL_JoystickGetHat(joystick, i) & direction)
+                rawInputs_.push_back("hat:" + std::to_string(i) + ":" + std::to_string(direction));
+    gamepadState_["inputs"] = rawInputs_;
+    if (!pad_) return 0;
     static constexpr SDL_GameControllerButton buttons[] = {
         SDL_CONTROLLER_BUTTON_A, SDL_CONTROLLER_BUTTON_B, SDL_CONTROLLER_BUTTON_X, SDL_CONTROLLER_BUTTON_Y,
         SDL_CONTROLLER_BUTTON_BACK, SDL_CONTROLLER_BUTTON_GUIDE, SDL_CONTROLLER_BUTTON_START,
@@ -73,6 +98,23 @@ uint32_t InputManager::PollGamepad(bool active) {
     }
     if (SDL_GameControllerGetAxis(pad_, SDL_CONTROLLER_AXIS_TRIGGERLEFT) > 16000) raw |= 1u << 24;
     if (SDL_GameControllerGetAxis(pad_, SDL_CONTROLLER_AXIS_TRIGGERRIGHT) > 16000) raw |= 1u << 25;
-    return raw;
+    for (size_t i = 0; i < GamepadSources.size(); ++i) {
+        if (!(raw & (1u << i))) continue;
+        SDL_GameControllerButtonBind binding;
+        if (i < 16) binding = SDL_GameControllerGetBindForButton(pad_, buttons[i]);
+        else {
+            const int axis = i >= 24 ? SDL_CONTROLLER_AXIS_TRIGGERLEFT + int(i - 24) :
+                int((i - 16) / 4) * 2 + ((i - 16) % 4 < 2 ? 1 : 0);
+            binding = SDL_GameControllerGetBindForAxis(pad_, SDL_GameControllerAxis(axis));
+        }
+        for (const auto& code : rawInputs_) {
+            const bool matches =
+                (binding.bindType == SDL_CONTROLLER_BINDTYPE_BUTTON && code == "button:" + std::to_string(binding.value.button)) ||
+                (binding.bindType == SDL_CONTROLLER_BINDTYPE_AXIS && code.rfind("axis:" + std::to_string(binding.value.axis) + ":", 0) == 0) ||
+                (binding.bindType == SDL_CONTROLLER_BINDTYPE_HAT && code == "hat:" + std::to_string(binding.value.hat.hat) + ":" + std::to_string(binding.value.hat.hat_mask));
+            if (matches) gamepadState_["aliases"][code].push_back(GamepadSources[i]);
+        }
+    }
+    return active ? raw : 0;
 }
 } // namespace reagba

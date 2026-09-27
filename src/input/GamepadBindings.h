@@ -2,6 +2,9 @@
 #include "rom/ROMManager.h"
 #include <array>
 #include <cstdint>
+#include <map>
+#include <set>
+#include <regex>
 
 namespace reagba {
 // Source bits are independent of SDL button indices and shared with the settings UI.
@@ -21,10 +24,12 @@ inline Json DefaultGamepadBindings() {
     return result;
 }
 inline Json NormalizeGamepadBindings(const Json& value) {
-    if (!value.is_object()) throw std::runtime_error("Gamepad bindings must be an object");
+    if (!value.is_object() || value.size() > 1024) throw std::runtime_error("Gamepad bindings must be an object");
     auto result = DefaultGamepadBindings();
     for (auto it = value.begin(); it != value.end(); ++it) {
-        if (!result.contains(it.key())) throw std::runtime_error("Unknown gamepad input");
+        static const std::regex rawSource("(button:[0-9]{1,5}|axis:[0-9]{1,5}:[+-]|hat:[0-9]{1,5}:[1248])");
+        if (!result.contains(it.key()) && !std::regex_match(it.key(), rawSource))
+            throw std::runtime_error("Unknown gamepad input");
         const auto& binding = it.value();
         if (!binding.is_object() || binding.size() != 2 || !binding.contains("target") || !binding.contains("mode"))
             throw std::runtime_error("Invalid gamepad binding");
@@ -34,40 +39,48 @@ inline Json NormalizeGamepadBindings(const Json& value) {
         if (binding["mode"] != "hold" && binding["mode"] != "turbo" && binding["mode"] != "single")
             throw std::runtime_error("Unknown gamepad trigger mode");
         result[it.key()] = binding;
+        // Legacy single-press bindings retain their input and target, using standard behavior.
+        if (binding["mode"] == "single" || (binding["target"] != "a" && binding["target"] != "b" &&
+            binding["target"] != "l" && binding["target"] != "r"))
+            result[it.key()]["mode"] = "hold";
     }
     return result;
 }
 
 class GamepadBindings {
     struct Binding { uint32_t mask = 0; int mode = 0; uint64_t started = 0; };
-    std::array<Binding, GamepadSources.size()> bindings_{};
-    uint32_t held_ = 0;
+    std::map<std::string, Binding> bindings_;
+    std::set<std::string> held_;
   public:
     GamepadBindings() { Configure(DefaultGamepadBindings()); }
     void Configure(const Json& config) {
         const auto normalized = NormalizeGamepadBindings(config);
-        for (size_t i = 0; i < bindings_.size(); ++i) {
-            const auto& value = normalized[GamepadSources[i]];
-            auto& binding = bindings_[i];
-            binding.mask = 0;
+        auto previous = std::move(bindings_);
+        bindings_.clear();
+        for (auto it = normalized.begin(); it != normalized.end(); ++it) {
+            const auto& value = it.value();
+            auto& binding = bindings_[it.key()];
+            if (previous.count(it.key())) binding.started = previous[it.key()].started;
             for (size_t j = 0; j < GamepadTargets.size(); ++j)
                 if (value["target"] == GamepadTargets[j]) binding.mask = 1u << j;
-            binding.mode = value["mode"] == "turbo" ? 1 : value["mode"] == "single" ? 2 : 0;
+            binding.mode = value["mode"] == "turbo" ? 1 : 0;
         }
     }
-    // Evaluate on the emulation thread so a single press lasts one game frame.
-    uint32_t Apply(uint32_t raw, uint64_t milliseconds) {
+    // Evaluate on the emulation thread using real time for turbo cadence.
+    uint32_t Apply(uint32_t raw, uint64_t milliseconds, const std::vector<std::string>& inputs = {}) {
+        std::set<std::string> current(inputs.begin(), inputs.end());
+        for (size_t i = 0; i < GamepadSources.size(); ++i)
+            if (raw & (1u << i)) current.insert(GamepadSources[i]);
         uint32_t result = 0;
-        for (size_t i = 0; i < bindings_.size(); ++i) {
-            if (!(raw & (1u << i))) continue;
-            auto& binding = bindings_[i];
-            const bool pressed = !(held_ & (1u << i));
+        for (auto& entry : bindings_) {
+            if (!current.count(entry.first)) continue;
+            auto& binding = entry.second;
+            const bool pressed = !held_.count(entry.first);
             if (pressed) binding.started = milliseconds;
-            if (binding.mode == 0 || (binding.mode == 2 && pressed) ||
-                (binding.mode == 1 && (milliseconds - binding.started) % 100 < 50))
+            if (binding.mode == 0 || (milliseconds - binding.started) % 100 < 50)
                 result |= binding.mask;
         }
-        held_ = raw;
+        held_ = std::move(current);
         return result;
     }
 };

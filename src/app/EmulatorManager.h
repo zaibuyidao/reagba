@@ -24,7 +24,11 @@ class EmulatorManager {
     void SetInput(uint32_t mask) {
         keys_.store(mask & 1023);
     }
-    void SetGamepadInput(uint32_t raw) { gamepadInput_.store(raw); }
+    void SetGamepadInput(uint32_t raw, std::vector<std::string> inputs = {}) {
+        std::lock_guard<std::mutex> lock(gamepadMutex_);
+        gamepadInput_ = raw;
+        gamepadRawInputs_ = std::move(inputs);
+    }
     void SetFastForward(bool held) { fastForward_.store(held); }
     FrameBuffer frames;
     AudioBuffer audio;
@@ -47,7 +51,10 @@ class EmulatorManager {
     bool quit_ = false;
     mutable std::mutex audioOutputMutex_;
     AudioOutput audioOutput_;
-    std::atomic<uint32_t> keys_{0}, gamepadInput_{0};
+    std::atomic<uint32_t> keys_{0};
+    std::mutex gamepadMutex_;
+    uint32_t gamepadInput_ = 0;
+    std::vector<std::string> gamepadRawInputs_;
     GamepadBindings gamepad_;
     std::atomic<bool> fastForward_{false};
     uint32_t appliedInput_ = 0, observedInput_ = 0;

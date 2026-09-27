@@ -16,6 +16,8 @@ reagba/web/
   popout.js
   game.html
   game.js
+  gamepad.html
+  gamepad.js
 ```
 
 运行关系为 `Lua 启动脚本 → ReaWebAPI WebView → reagba Native Service / Frame Stream → ReaGBA Core`。窗口、停靠、位置恢复、文件选择和原生通信由 ReaWebAPI 提供。前端保留原有布局、样式、八种语言、游戏库三种视图、搜索/收藏、设置、分隔条和全部模拟控制。
@@ -33,13 +35,11 @@ reagba/web/
 
 默认按键：W/S/A/D 为方向，J/K 为 A/B，Q/O 为 R/L，回车为 Start，空格为 Select；按住 L 临时 4× 加速。支持自定义按键和 SDL GameController。编辑搜索、设置或失焦时释放游戏输入。默认音量 30%。
 
-v0.1.4 的设置页提供手柄独立绑定，支持 SDL GameController 识别的 A/B/X/Y、肩键、扳机、方向键、双摇杆方向及按压、Start/Select 等输入。PS4 按键标注为 ×/○/□/△、L1/R1、L2/R2、Share/Options。每个输入可映射到任一 GBA 按键或设为不绑定，多个输入可映射到同一操作。
+v0.1.5 在设置页通过“配置手柄…”打开独立窗口。点击 GBA 操作旁的绑定项，再按下手柄按键即可录入，支持 SDL 报告的任意按钮编号、轴方向和方向帽，不要求设备具有标准 GameController 映射。每个 GBA 操作显示一个绑定按钮，点击后显示“请按键…”，识别输入后替换该操作的原有绑定并显示按键码。Esc 取消录入。录入前已按住的输入须松开后再按。
 
-- **正常长按**：按住时保持，松开后释放。
-- **连发**：每秒 10 次，按下和释放各 50 ms，按实际时间计时。
-- **单次触发**：按下时保持一个游戏帧，必须松开后才能再次触发。
+普通绑定采用标准按键行为，按住时保持，松开后释放。GBA A/B/L/R 的绑定可选开启 Turbo，每秒 10 次，按下和释放各 50 ms。手柄 X/Y 或任意其他输入绑定到这些动作时同样支持 Turbo。方向、Start、Select 保持标准行为。旧单次触发配置自动转为标准行为，按键绑定保留。
 
-默认 A/B 对应 GBA A/B，肩键对应 L/R，Back/Start 对应 Select/Start，方向键及左摇杆对应 GBA 方向。其余输入默认不绑定，默认触发方式为正常长按。配置自动保存到 `config/preferences.json` 的 `gamepad_bindings`，下次启动自动恢复，可单独恢复默认手柄绑定。Windows、macOS、Linux 使用同一映射和触发逻辑。当前轮询首个可用手柄，配置为全局配置。
+默认 A/B 对应 GBA A/B，肩键对应 L/R，Back/Start 对应 Select/Start，方向键及左摇杆对应 GBA 方向。其余输入默认不绑定，默认采用标准按键行为。配置自动保存到 `config/preferences.json` 的 `gamepad_bindings`，下次启动自动恢复，可单独恢复默认手柄绑定。Windows、macOS、Linux 使用同一映射和触发逻辑。当前轮询首个可用手柄，配置为全局配置。原始编号由设备和驱动决定，更换手柄或平台后可能需要重新录入。
 
 保留暂停/继续、重置、停止、1×/2×/4×、音量、跳帧、九个即时存档槽、电池存档、BMP 截图、最近游玩和可选封面下载。支持整数缩放、最近邻/线性过滤、LCD3X 和 lcd-grid-v2。显示和 Shader 在 WebView 内执行。
 
@@ -63,7 +63,7 @@ Windows、macOS 和 Linux 的核心数据统一位于 `<REAPER 资源目录>/Scr
 python scripts/build.py
 ```
 
-生成的 DLL 位于 `build/native/bin/Release/reaper_reagba-x64.dll`，安装组件和平台安装包只向 `UserPlugins` 安装核心二进制。`ReaGBA-ReaPack-v0.1.4.zip` 的 `ReaGBA/` 下包含 `extension/`、`web/` 和 `ReaGBA.ext`。界面在本仓库 `web/` 维护，不需要重新编译核心即可修改界面。
+生成的 DLL 位于 `build/native/bin/Release/reaper_reagba-x64.dll`，安装组件和平台安装包只向 `UserPlugins` 安装核心二进制。`ReaGBA-ReaPack-v0.1.5.zip` 的 `ReaGBA/` 下包含 `extension/`、`web/` 和 `ReaGBA.ext`。界面在本仓库 `web/` 维护，不需要重新编译核心即可修改界面。
 
 Linux 构建依赖为 C/C++ 工具链、CMake、pkg-config、SDL 音频/手柄所需开发库和 libcurl，不再要求 WebKitGTK。macOS 的 Objective-C/SWELL 支持仅用于 SDL 和 REAPER SDK 兼容，不包含窗口宿主。
 

@@ -65,7 +65,6 @@ const output=path.resolve(__dirname,'../verification/i18n');
      layout.push({language,view,width,...m});
     };
     await check('settings');
-    if(width===320){await page.locator('[data-i18n=gamepadTitle]').scrollIntoViewIfNeeded();await page.screenshot({path:path.join(output,language+'-gamepad.png')});}
     if(width===320){await page.locator('#settings-view').evaluate(e=>e.scrollTop=0);await page.screenshot({path:path.join(output,language+'-settings.png')});}
     await page.click('#settings-toggle');await settle();await check('library');
     // A valid locale reaches static text, tooltips, dynamic status and save slots.
