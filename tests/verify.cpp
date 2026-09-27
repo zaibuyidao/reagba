@@ -71,6 +71,9 @@ static void SelfTest() {
         Require(!fs::exists(settingsRoot/"Scripts"/"zaibuyidao Scripts"/"ReaGBA"),"Legacy runtime directory created");
         Require(!fs::exists(data/"ROM"),"Uppercase ROM directory created");
         auto settings=Call(manager,{{"action","get_settings"}}).at("result");
+        Require(settings.at("gamepad_bindings") == DefaultGamepadBindings(), "Default gamepad bindings");
+        Require(!Call(manager,{{"action","set_settings"},{"settings",{{"gamepad_bindings",{{"x",{{"target","a"},{"mode","invalid"}}}}}}}}).value("ok",true), "Invalid gamepad mode accepted");
+        Require(Call(manager,{{"action","set_settings"},{"settings",{{"gamepad_bindings",{{"x",{{"target","a"},{"mode","single"}}},{"y",{{"target","b"},{"mode","turbo"}}}}}}}}).value("ok",false), "Custom gamepad bindings rejected");
         Require(settings.at("rom_directory")=="","ROM folder must remain empty until selected");
         Require(settings.at("auto_download_covers")==false,"Covers must default to offline");
         Require(settings.at("keys")==DefaultKeys() && settings.at("fast_forward_key")=="L","Default keyboard mismatch");
@@ -90,6 +93,9 @@ static void SelfTest() {
         auto instance=std::make_unique<EmulatorManager>(defaultROM,data);
         auto &manager=*instance;
         const auto settings=Call(manager,{{"action","get_settings"}}).at("result");
+        Require(settings.at("gamepad_bindings").at("x") == Json({{"target","a"},{"mode","single"}}), "Single gamepad binding not restored");
+        Require(settings.at("gamepad_bindings").at("y") == Json({{"target","b"},{"mode","turbo"}}), "Turbo gamepad binding not restored");
+        Require(settings.at("gamepad_bindings").at("a") == DefaultGamepadBindings().at("a"), "Missing gamepad defaults not restored");
         Require(fs::u8path(settings.at("rom_directory").get<std::string>())==customROM,"ROM folder did not survive restart");
         Require(fs::u8path(settings.at("last_rom_directory").get<std::string>())==customROM,"Last opened ROM folder did not survive restart");
         Require(settings.at("keys")[0]=="F" && settings.at("keys")[8]=="E" && settings.at("fast_forward_key")=="R","Custom keys did not survive restart");

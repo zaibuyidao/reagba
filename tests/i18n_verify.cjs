@@ -9,7 +9,7 @@ const output=path.resolve(__dirname,'../verification/i18n');
   env:Object.fromEntries(Object.entries(process.env).map(([k,v])=>[k.toUpperCase(),v]))});
  try{
   const page=await browser.newPage({locale:'zh-CN'}),errors=[],requests=[];
-  let prefs={},rejectLanguage=false,ignoreLanguage=false;
+  let prefs={library_expanded:true},rejectLanguage=false,ignoreLanguage=false;
   const game={title:'Zelda <test>',hash:'test',path:'test.gba',code:'TEST',size:16777216,play_seconds:660,last_played:100,favorite:false};
   let state={loaded:true,running:false,fps:59.7,speed:1,base_speed:1,volume:.3,frame_skip:0,app_version:'i18n-test',core:'mGBA',reaper:true,docked:false,game};
   page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text());});
@@ -65,6 +65,7 @@ const output=path.resolve(__dirname,'../verification/i18n');
      layout.push({language,view,width,...m});
     };
     await check('settings');
+    if(width===320){await page.locator('[data-i18n=gamepadTitle]').scrollIntoViewIfNeeded();await page.screenshot({path:path.join(output,language+'-gamepad.png')});}
     if(width===320){await page.locator('#settings-view').evaluate(e=>e.scrollTop=0);await page.screenshot({path:path.join(output,language+'-settings.png')});}
     await page.click('#settings-toggle');await settle();await check('library');
     // A valid locale reaches static text, tooltips, dynamic status and save slots.

@@ -30,6 +30,8 @@ const output = path.resolve(__dirname, '../verification/settings');
                 let result = true;
                 if (cmd.action === 'get_settings') result = prefs;
                 if (cmd.action === 'set_settings') {
+                    if(cmd.settings.gamepad_bindings&&window.rejectGamepad)return {ok:false,error:'Write failed: preferences.json'};
+                    if(cmd.settings.gamepad_bindings&&window.ignoreGamepad)return {ok:true,result:prefs};
                     prefs = {...prefs, ...cmd.settings};
                     localStorage.setItem('settings-test', JSON.stringify(prefs));
                     result = prefs;
@@ -72,6 +74,16 @@ const output = path.resolve(__dirname, '../verification/settings');
         assert.equal(await page.locator('#audio-track-row').isVisible(),true);
         await page.selectOption('#audio-track','selected');
         await page.waitForFunction(()=>JSON.parse(localStorage.getItem('settings-test')).audio_track==='selected');
+        const pad=(source,field)=>page.locator(`#gamepad-bindings select[data-source="${source}"][data-field="${field}"]`);
+        assert.equal(await page.locator('#gamepad-bindings .gamepad-binding').count(),26);
+        assert.equal(await pad('a','target').inputValue(),'a');
+        assert.equal(await pad('x','target').inputValue(),'none');
+        for(const [source,target,mode] of [['a','none','hold'],['x','a','single'],['y','b','turbo'],['lefttrigger','l','hold'],['dpup','start','single']]){
+            await pad(source,'target').selectOption(target);
+            await page.waitForFunction(()=>!document.getElementById('reset-gamepad').disabled);
+            await pad(source,'mode').selectOption(mode);
+            await page.waitForFunction(()=>!document.getElementById('reset-gamepad').disabled);
+        }
         const defaults = ['J','K','Space','Return','D','A','W','S','Q','O','L'];
         assert.deepEqual(await page.locator('#keys button').allTextContents(),defaults);
         await page.selectOption('#audio-output','reaper_output');
@@ -111,6 +123,24 @@ const output = path.resolve(__dirname, '../verification/settings');
         await page.waitForFunction(() => document.getElementById('about-version').textContent === 'test');
         await page.click('#settings-toggle');
         assert.equal(await page.locator('#shader').inputValue(), 'lcd-grid-v2', 'preset restored on reopen');
+        assert.equal(await pad('a','target').inputValue(),'none','disabled button restored');
+        assert.equal(await pad('x','target').inputValue(),'a','custom action restored');
+        assert.equal(await pad('x','mode').inputValue(),'single','single mode restored');
+        assert.equal(await pad('y','mode').inputValue(),'turbo','turbo mode restored');
+        assert.equal(await pad('lefttrigger','target').inputValue(),'l','trigger binding restored');
+        await page.click('#reset-gamepad');
+        await page.waitForFunction(()=>!document.getElementById('reset-gamepad').disabled);
+        assert.equal(await pad('a','target').inputValue(),'a');
+        assert.equal(await pad('x','target').inputValue(),'none');
+        assert.equal(await pad('y','mode').inputValue(),'hold');
+        for(const flag of ['rejectGamepad','ignoreGamepad']){
+            await page.evaluate(flag=>window[flag]=true,flag);
+            await pad('x','target').selectOption('a');
+            await page.waitForFunction(()=>!document.getElementById('reset-gamepad').disabled);
+            assert.equal(await pad('x','target').inputValue(),'none','failed save restores binding');
+            assert.ok(await page.locator('#toast').evaluate(e=>e.classList.contains('error')));
+            await page.evaluate(flag=>window[flag]=false,flag);
+        }
         assert.equal(await page.locator('#audio-output').inputValue(),'reaper_track','audio output restored');
         assert.equal(await page.locator('#audio-track').inputValue(),'selected','target rule restored');
         assert.equal(await page.locator('#audio-channels').inputValue(),'3:1','hardware output restored');
@@ -137,6 +167,6 @@ const output = path.resolve(__dirname, '../verification/settings');
         await page.waitForFunction(()=>document.getElementById('toast').textContent.includes('Q / O = R / L')&&document.getElementById('toast').textContent.endsWith('Hold L to fast-forward'));
         assert.deepEqual(errors, [], 'UI loads directly as four source files, without JS/CSP errors');
         fs.writeFileSync(path.join(output,'report.json'),JSON.stringify({passed:true,sizes:results},null,2));
-        console.log('PASS: settings at 10 sizes, shader selection/persistence, no horizontal overflow or script errors');
+        console.log('PASS: gamepad remapping, modes, persistence, reset, save failures, keyboard/audio/shader regression and settings at 10 sizes');
     } finally { await browser.close(); }
 })().catch(error => {console.error(error); process.exitCode=1;});

@@ -6,6 +6,7 @@
 #include "video/FrameBuffer.h"
 #include "audio/AudioBuffer.h"
 #include "audio/AudioOutput.h"
+#include "input/GamepadBindings.h"
 #include <thread>
 #include <mutex>
 #include <condition_variable>
@@ -23,6 +24,7 @@ class EmulatorManager {
     void SetInput(uint32_t mask) {
         keys_.store(mask & 1023);
     }
+    void SetGamepadInput(uint32_t raw) { gamepadInput_.store(raw); }
     void SetFastForward(bool held) { fastForward_.store(held); }
     FrameBuffer frames;
     AudioBuffer audio;
@@ -45,7 +47,8 @@ class EmulatorManager {
     bool quit_ = false;
     mutable std::mutex audioOutputMutex_;
     AudioOutput audioOutput_;
-    std::atomic<uint32_t> keys_{0};
+    std::atomic<uint32_t> keys_{0}, gamepadInput_{0};
+    GamepadBindings gamepad_;
     std::atomic<bool> fastForward_{false};
     uint32_t appliedInput_ = 0, observedInput_ = 0;
     double EffectiveSpeed() const { return fastForward_.load() ? 4.0 : speed_; }

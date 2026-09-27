@@ -15,6 +15,8 @@ class InputManager {
     uint32_t lastScan_ = 0;
 
   public:
+    // Takes ownership when a controller is supplied (used by virtual-device tests).
+    explicit InputManager(SDL_GameController* pad = nullptr) : pad_(pad) {}
     ~InputManager();
     void Configure(const Json &);
     void Key(SDL_Scancode key, bool down) {
@@ -29,6 +31,7 @@ class InputManager {
         fastForward_ = false;
     }
     uint32_t Poll(bool active);
+    uint32_t PollGamepad(bool active);
     bool FastForward() const { return fastForward_; }
     const std::array<SDL_Scancode, 11> &Mapping() const {
         return mapping_;

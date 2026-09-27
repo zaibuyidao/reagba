@@ -24,6 +24,12 @@ EmulatorManager::EmulatorManager(fs::path romDir, fs::path dataDir)
     if (!preferences_.contains("rom_directory") || !preferences_["rom_directory"].is_string())
         preferences_["rom_directory"] = "";
     NormalizeKeys(preferences_);
+    try {
+        preferences_["gamepad_bindings"] = NormalizeGamepadBindings(preferences_.value("gamepad_bindings", Json::object()));
+    } catch (const std::exception&) {
+        preferences_["gamepad_bindings"] = DefaultGamepadBindings();
+    }
+    gamepad_.Configure(preferences_["gamepad_bindings"]);
     const auto mode = preferences_.value("audio_output", Json());
     if (mode != "system" && mode != "reaper_output" && mode != "reaper_track") preferences_["audio_output"] = "system";
     const auto track = preferences_.value("audio_track", Json());
@@ -123,8 +129,10 @@ Json EmulatorManager::Handle(const Json &cmd) {
             if (settings.contains(key) &&
                 (!settings[key].is_string() || settings[key].get<std::string>().empty()))
                 throw std::runtime_error("ROM directories must be non-empty paths");
+        if (settings.contains("gamepad_bindings"))
+            settings["gamepad_bindings"] = NormalizeGamepadBindings(settings["gamepad_bindings"]);
         for (auto it = settings.begin(); it != settings.end(); ++it)
-            if (it.key() == "keys" || it.key() == "bios" || it.key() == "fast_forward_key" ||
+            if (it.key() == "gamepad_bindings" || it.key() == "keys" || it.key() == "bios" || it.key() == "fast_forward_key" ||
                 it.key() == "rom_directory" || it.key() == "last_rom_directory" || it.key() == "auto_download_covers" ||
                 it.key() == "audio_output" || it.key() == "audio_track" || it.key() == "audio_channel" || it.key() == "audio_mono")
                 preferences_[it.key()] = it.value();
@@ -133,6 +141,7 @@ Json EmulatorManager::Handle(const Json &cmd) {
             std::lock_guard<std::mutex> lock(audioOutputMutex_);
             audioOutput_ = {preferences_["audio_output"], preferences_["audio_track"], preferences_["audio_channel"], preferences_["audio_mono"]};
         }
+        if (settings.contains("gamepad_bindings")) gamepad_.Configure(preferences_["gamepad_bindings"]);
         covers_.Enable(preferences_.value("auto_download_covers", false));
         return preferences_;
     }
@@ -249,6 +258,8 @@ void EmulatorManager::Run() {
         }
         const double speed = EffectiveSpeed();
         audible.store(running_ && speed == 1);
+        const auto gamepadKeys = gamepad_.Apply(gamepadInput_.load(),
+            std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now().time_since_epoch()).count());
         if (!running_ || !core_) {
             next = Clock::now();
             meter = next;
@@ -256,7 +267,9 @@ void EmulatorManager::Run() {
             continue;
         }
         try {
-            appliedInput_ = keys_.load();
+            appliedInput_ = keys_.load() | gamepadKeys;
+            if ((appliedInput_ & 0x30) == 0x30) appliedInput_ &= ~0x30u;
+            if ((appliedInput_ & 0xc0) == 0xc0) appliedInput_ &= ~0xc0u;
             core_->SetInput(appliedInput_);
             observedInput_ |= core_->ReadInput();
             core_->RunFrame();

@@ -92,3 +92,5 @@ h1 [data-i18n]{font:inherit;vertical-align:baseline;padding:0;margin:0;backgroun
 
 /* WebView framebuffer occupies the existing game rectangle. */
 #game-frame{position:absolute;inset:0;width:100%;height:100%;border-radius:inherit;pointer-events:none;display:none}.playing #game-frame{display:block}
+
+.gamepad-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,245px),1fr));gap:8px}.gamepad-binding{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;background:#19242a;border-radius:7px;padding:8px;font-size:11px}.gamepad-source{grid-column:1/-1}.gamepad-binding label{display:flex;flex-direction:column;gap:5px;min-width:0;color:var(--muted)}.gamepad-binding select{width:100%;min-width:0;font-size:11px;padding:6px}#reset-gamepad{margin-top:12px}

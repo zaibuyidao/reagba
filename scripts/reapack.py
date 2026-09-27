@@ -7,10 +7,8 @@ PLATFORM_IDS={'windows-x64':'win64','macos-x86_64':'darwin64','macos-arm64':'dar
 BASE_URL='https://raw.githubusercontent.com/zaibuyidao/ReaScripts/$commit/Modules/ReaGBA'
 WEB_FILES=('zaibuyidao_ReaGBA.lua','index.html','style.css','i18n.js','app.js','bridge.js','video.js','popout.js','game.html','game.js')
 CHANGELOG=(
-    'Stop emulation and release all audio outputs when the main window or dock tab closes, including when page cleanup is unavailable.',
-    'Remove the redundant audio output description.',
-    'Rename audio output modes to System default device, Hardware output and Target track, with updated translations.',
-    'Simplify hardware output labels to the starting channel number and device channel names, listing stereo pairs before mono outputs.',
+    'Add customizable gamepad bindings for GBA buttons, D-pad, sticks and triggers, with PS4 button labels.',
+    'Support hold, turbo and single-press modes per input, with saved bindings and a reset to defaults on Windows, macOS and Linux.',
 )
 
 def sources():

@@ -228,6 +228,7 @@ void Tick() {
     if ((mask & 0x30) == 0x30) mask &= ~0x30u;
     if ((mask & 0xc0) == 0xc0) mask &= ~0xc0u;
     s.manager->SetInput(mask);
+    s.manager->SetGamepadInput(s.input->PollGamepad(active));
     s.manager->SetFastForward(active && (s.fast || s.fastPressed));
     s.pressed = 0; s.fastPressed = false;
 }
