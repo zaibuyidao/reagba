@@ -13,8 +13,9 @@ inline constexpr std::array<const char*, 26> GamepadSources = {
     "leftshoulder", "rightshoulder", "dpup", "dpdown", "dpleft", "dpright", "touchpad",
     "leftup", "leftdown", "leftleft", "leftright", "rightup", "rightdown", "rightleft", "rightright",
     "lefttrigger", "righttrigger"};
-inline constexpr std::array<const char*, 10> GamepadTargets = {
-    "a", "b", "select", "start", "right", "left", "up", "down", "r", "l"};
+inline constexpr std::array<const char*, 11> GamepadTargets = {
+    "a", "b", "select", "start", "right", "left", "up", "down", "r", "l", "fast_forward"};
+inline constexpr uint32_t GamepadFastForwardMask = 1u << 10;
 inline Json DefaultGamepadBindings() {
     static constexpr int targets[] = {0, 1, -1, -1, 2, -1, 3, -1, -1, 9, 8, 6, 7, 5, 4, -1,
                                        6, 7, 5, 4, -1, -1, -1, -1, -1, -1};
@@ -40,8 +41,7 @@ inline Json NormalizeGamepadBindings(const Json& value) {
             throw std::runtime_error("Unknown gamepad trigger mode");
         result[it.key()] = binding;
         // Legacy single-press bindings retain their input and target, using standard behavior.
-        if (binding["mode"] == "single" || (binding["target"] != "a" && binding["target"] != "b" &&
-            binding["target"] != "l" && binding["target"] != "r"))
+        if (binding["mode"] == "single" || (binding["target"] != "a" && binding["target"] != "b"))
             result[it.key()]["mode"] = "hold";
     }
     return result;

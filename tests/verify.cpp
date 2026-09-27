@@ -74,8 +74,16 @@ static void SelfTest() {
         Require(settings.at("gamepad_bindings") == DefaultGamepadBindings(), "Default gamepad bindings");
         Require(!Call(manager,{{"action","set_settings"},{"settings",{{"gamepad_bindings",{{"x",{{"target","a"},{"mode","invalid"}}}}}}}}).value("ok",true), "Invalid gamepad mode accepted");
         Require(Call(manager,{{"action","set_settings"},{"settings",{{"gamepad_bindings",{{"x",{{"target","a"},{"mode","single"}}},{"y",{{"target","b"},{"mode","turbo"}}}}}}}}).value("ok",false), "Custom gamepad bindings rejected");
-        Require(Call(manager,{{"action","set_settings"},{"settings",{{"gamepad_bindings",{{"x",{{"target","a"},{"mode","single"}}},{"y",{{"target","b"},{"mode","turbo"}}},{"button:40",{{"target","l"},{"mode","hold"}}}}}}}}).value("ok",false), "Raw gamepad binding rejected");
-        Require(settings.at("rom_directory")=="","ROM folder must remain empty until selected");
+        Require(Call(manager,{{"action","set_settings"},{"settings",{{"gamepad_bindings",{{"x",{{"target","a"},{"mode","single"}}},{"y",{{"target","b"},{"mode","turbo"}}},{"button:40",{{"target","l"},{"mode","hold"}}},{"button:41",{{"target","fast_forward"},{"mode","hold"}}}}}}}}).value("ok",false), "Raw gamepad binding rejected");
+        Require(fs::u8path(settings.at("rom_directory").get<std::string>())==defaultROM,"Default game folder missing");
+        Call(manager, {{"action", "set_speed"}, {"value", 2}});
+        manager.SetGamepadInput(0, {"button:41"});
+        Require(Call(manager, {{"action", "get_emulator_state"}})["result"]["speed"] == 4, "Gamepad holds 4x speed");
+        manager.SetFastForward(true);manager.SetGamepadInput(0);
+        Require(Call(manager, {{"action", "get_emulator_state"}})["result"]["speed"] == 4, "Keyboard boost survives gamepad release");
+        manager.SetFastForward(false);
+        Require(Call(manager, {{"action", "get_emulator_state"}})["result"]["speed"] == 2, "Boost release restores selected speed");
+        Call(manager, {{"action", "set_speed"}, {"value", 1}});
         Require(settings.at("auto_download_covers")==false,"Covers must default to offline");
         Require(settings.at("keys")==DefaultKeys() && settings.at("fast_forward_key")=="L","Default keyboard mismatch");
         Require(std::abs(manager.volume.load()-.3f)<.0001f,"Volume must default to 30 percent");
@@ -97,12 +105,18 @@ static void SelfTest() {
         Require(settings.at("gamepad_bindings").at("x") == Json({{"target","a"},{"mode","hold"}}), "Legacy gamepad binding not restored with standard behavior");
         Require(settings.at("gamepad_bindings").at("y") == Json({{"target","b"},{"mode","turbo"}}), "Turbo gamepad binding not restored");
         Require(settings.at("gamepad_bindings").at("button:40").at("target") == "l", "Raw button code not restored");
+        Require(settings.at("gamepad_bindings").at("button:41").at("target") == "fast_forward", "Gamepad fast-forward binding not restored");
         Require(settings.at("gamepad_bindings").at("a") == DefaultGamepadBindings().at("a"), "Missing gamepad defaults not restored");
         Require(fs::u8path(settings.at("rom_directory").get<std::string>())==customROM,"ROM folder did not survive restart");
         Require(fs::u8path(settings.at("last_rom_directory").get<std::string>())==customROM,"Last opened ROM folder did not survive restart");
         Require(settings.at("keys")[0]=="F" && settings.at("keys")[8]=="E" && settings.at("fast_forward_key")=="R","Custom keys did not survive restart");
         Require(std::abs(manager.volume.load()-.45f)<.0001f,"Custom volume did not survive restart");
         Require(settings.at("auto_download_covers")==true,"Cover setting did not survive restart");
+    }
+    WriteJSON(data/"config"/"preferences.json", {{"rom_directory", ""}});
+    {
+        EmulatorManager manager(defaultROM,data);
+        Require(Call(manager, {{"action", "get_settings"}})["result"]["rom_directory"] == defaultROM.u8string(), "Legacy empty game folder migrates to default");
     }
     fs::remove_all(settingsRoot);
     std::cout << "PASS: SHA-256, bounded audio ring, concurrent triple buffer, persisted ROM folders, input and audio settings\n";

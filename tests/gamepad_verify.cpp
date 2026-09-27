@@ -45,7 +45,7 @@ int main() {
         for (auto target : GamepadTargets) {
             config["button:40"] = {{"target", target}, {"mode", "turbo"}};
             const std::string action(target);
-            const bool turbo = action == "a" || action == "b" || action == "l" || action == "r";
+            const bool turbo = action == "a" || action == "b";
             require(NormalizeGamepadBindings(config)["button:40"]["mode"] == (turbo ? "turbo" : "hold"), "turbo is optional only for action targets");
         }
         for (Json invalid : {Json::array(), Json{{"unknown", {}}}, Json{{"a", {{"target", "invalid"}, {"mode", "hold"}}}},
@@ -113,12 +113,12 @@ int main() {
             auto config = defaults;
             config["button:40"] = {{"target", "a"}, {"mode", "hold"}};
             config["axis:1:-"] = {{"target", "l"}, {"mode", "hold"}};
-            config["hat:0:2"] = {{"target", "r"}, {"mode", "turbo"}};
+            config["hat:0:2"] = {{"target", "b"}, {"mode", "turbo"}};
             mapping.Configure(config);mapping.Apply(0, 0);
-            require(mapping.Apply(0, 1, raw) == (1 | 512 | 256), "arbitrary raw bindings reach GBA actions");
+            require(mapping.Apply(0, 1, raw) == (1 | 512 | 2), "arbitrary raw bindings reach GBA actions");
             require(mapping.Apply(0, 60, raw) == (1 | 512), "raw standard holds during turbo release phase");
             require(mapping.Apply(0, 61) == 0, "raw release");
-            require(mapping.Apply(0, 62, raw) == (1 | 512 | 256), "raw turbo restarts on press");
+            require(mapping.Apply(0, 62, raw) == (1 | 512 | 2), "raw turbo restarts on press");
             require(input.PollGamepad(false) == 0 && input.GamepadState()["connected"] == true, "capture works while gameplay inactive");
             SDL_JoystickDetachVirtual(generic);input.PollGamepad(true);
             require(input.RawGamepadInputs().empty() && input.GamepadState()["connected"] == false, "raw disconnect release");

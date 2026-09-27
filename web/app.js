@@ -88,8 +88,8 @@ async function refreshSlots(){slots=state.loaded?await call('get_save_states'):[
 function renderSlots(){$('slots').replaceChildren();for(let n=1;n<=9;n++){const entry=slots.find(x=>x.slot===n);const b=make('button',(slot===n?'selected ':'')+(entry?.exists?'saved':''),n);b.title=entry?.metadata?i18n.date(new Date(entry.metadata.timestamp*1000)):t('emptySlot');b.onclick=()=>{slot=n;renderSlots();};b.setAttribute('aria-label',t('slotLabel',{slot:i18n.number(n),detail:b.title}));b.setAttribute('aria-pressed',String(slot===n));$('slots').append(b);}$('save-hint').textContent=t(slots.find(x=>x.slot===slot)?.exists?'slotSaved':'slotEmpty',{slot:i18n.number(slot)});$('load').disabled=!state.loaded||!slots.find(x=>x.slot===slot)?.exists;}
 const defaultKeys=['J','K','Space','Return','D','A','W','S','Q','O'];const labels=['A','B','Select','Start','→','←','↑','↓','R','L','holdFast'];
 function showKeyHint(){const keys=settings.keys||defaultKeys;toast(t('keyHint',{up:keys[6],down:keys[7],left:keys[5],right:keys[4],a:keys[0],b:keys[1],r:keys[8],l:keys[9],start:keys[3],select:keys[2],fast:settings.fast_forward_key||'L'}));}
-function renderKeys(){$('keys').replaceChildren();[...(settings.keys||defaultKeys),settings.fast_forward_key||'L'].forEach((key,i)=>{const row=make('div','key-pair');const b=make('button','',binding===i?t('pressKey'):key);b.onclick=()=>{binding=i;renderKeys();};row.append(make('span','',i===10?t('holdFast'):labels[i]),b);$('keys').append(row);});}
-$('open-gamepad-settings').onclick=run(async()=>{const button=$('open-gamepad-settings');button.disabled=true;try{await call('gamepad_settings');}finally{button.disabled=false;}});
+function renderKeys(){$('keys').replaceChildren();[...(settings.keys||defaultKeys),settings.fast_forward_key||'L'].forEach((key,i)=>{const row=make('div','key-pair');const b=make('button','',binding===i?t('pressKey'):key);b.onclick=()=>{cancelCapture();binding=i;renderKeys();};row.append(make('span','',i===10?t('holdFast'):labels[i]),b);$('keys').append(row);});}
+initGamepadBindings();
 async function saveSettings(values){settings=await call('set_settings',{settings:values});}
 let audioBusy=false,audioRefreshing=false,audioOutputs={};
 function renderAudio(){
@@ -129,7 +129,7 @@ $('audio-channels').onchange=run(()=>{const [channel,count]=$('audio-channels').
 function renderShader(){const preset=settings.shader||'none';$('shader').value=preset;$('filter').disabled=preset!=='none';}
 $('shader').onchange=run(async()=>{try{await saveSettings({shader:$('shader').value});}finally{renderShader();}});
 document.addEventListener('keydown',run(async e=>{if(binding<0)return;e.preventDefault();e.stopPropagation();const map={ArrowUp:'Up',ArrowDown:'Down',ArrowLeft:'Left',ArrowRight:'Right',Enter:'Return',Space:'Space',Backspace:'Backspace',ShiftLeft:'Left Shift',ShiftRight:'Right Shift'};const key=map[e.code]||(/^Key[A-Z]$/.test(e.code)?e.code.slice(3):/^Digit[0-9]$/.test(e.code)?e.code.slice(5):null);if(e.key==='Escape'){binding=-1;renderKeys();return;}if(!key){toast(t('unsupportedKey'),true);return;}const index=binding;binding=-1;if(index===10)await saveSettings({fast_forward_key:key});else{const keys=[...(settings.keys||defaultKeys)];keys[index]=key;await saveSettings({keys});}renderKeys();}),true);
-$('settings-toggle').onclick=()=>{const show=$('settings-view').hidden;$('settings-view').hidden=!show;$('library-view').hidden=show;$('settings-toggle').textContent=show?'×':'⚙';renderSettingsToggle();binding=-1;document.body.classList.toggle('settings-open',show);if(show)run(refreshAudioOutput)();updateKeyboardContext();scheduleViewport();};
+$('settings-toggle').onclick=()=>{const show=$('settings-view').hidden;$('settings-view').hidden=!show;$('library-view').hidden=show;$('settings-toggle').textContent=show?'×':'⚙';renderSettingsToggle();binding=-1;cancelCapture();document.body.classList.toggle('settings-open',show);if(show)run(refreshAudioOutput)();updateKeyboardContext();scheduleViewport();};
 document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{filter=b.dataset.filter;document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===b));renderGames();});
 $('search').oninput=renderGames;$('sort').onchange=renderGames;$('refresh').onclick=run(scan);
 $('open').onclick=run(async()=>{const s=await call('open_rom',{dialog_title:t('dialogROM'),initial_path:settings.last_rom_directory||settings.rom_directory||''});if(s){onNativeState(s);await scan();await refreshSlots();showKeyHint();}});
@@ -138,6 +138,7 @@ for(const id of ['reset','stop'])$(id).onclick=run(async()=>onNativeState(await 
 $('speed').onclick=run(async()=>onNativeState(await call('set_speed',{value:state.base_speed===1?2:state.base_speed===2?4:1})));
 $('fullscreen').onclick=run(()=>call('fullscreen'));
 $('shot').onclick=run(async()=>{await call('screenshot');toast(t('shotSaved'));});
+window.onStateSlot=async n=>{slot=n;await refreshSlots();};
 $('save').onclick=run(async()=>{await call('save_state',{slot});await refreshSlots();toast(t('stateSaved',{slot:i18n.number(slot)}));});
 $('load').onclick=run(async()=>{onNativeState(await call('load_state',{slot}));toast(t('stateLoaded',{slot:i18n.number(slot)}));});
 $('volume').oninput=()=>$('volume-value').textContent=$('volume').value+'%';$('volume').onchange=run(()=>call('set_volume',{value:Number($('volume').value)/100}));
@@ -245,11 +246,12 @@ function renderSettingsToggle(){const text=t($('settings-view').hidden?'settings
 function applyLanguage(value){
  i18n.set(value);document.documentElement.lang=i18n.language;i18n.apply();$('language').value=i18n.language;
  window.ReaGBAPopout?.render();
- renderSettingsToggle();renderAudio();renderGames();renderCoverStatus();renderKeys();renderSlots();renderState(state);scheduleViewport();
+ $('save').title=t('save')+' · Ctrl+1–9';$('load').title=t('load')+' · Shift+1–9';
+ renderSettingsToggle();renderAudio();renderGames();renderCoverStatus();renderKeys();renderGamepad();renderSlots();renderState(state);scheduleViewport();
 }
 for(const [code,catalog] of Object.entries(i18n.catalogs)){const option=make('option','',catalog.name);option.value=code;option.lang=code;$('language').append(option);}
 $('language').onchange=run(async()=>{
- const previous=i18n.language,next=$('language').value;binding=-1;$('language').disabled=true;clearTimeout(toastTimer);$('toast').className='';
+ const previous=i18n.language,next=$('language').value;binding=-1;cancelCapture();$('language').disabled=true;clearTimeout(toastTimer);$('toast').className='';
  applyLanguage(next);
  try{await saveSettings({language:next});if(settings.language!==next)throw Error(t('languageSaveFailed'));}
  catch(error){applyLanguage(previous);throw error;}

@@ -23,7 +23,7 @@ i18n.catalogs.it={name:'Italiano',messages:{settings:'Impostazioni'}};
 i18n.set('it');assert.equal(i18n.t('settings'),'Impostazioni');assert.equal(i18n.t('save'),base.save);
 assert.equal(i18n.t('coverAlt',{title:'<img onerror=alert(1)>'}),'Cover for <img onerror=alert(1)>');
 i18n.set('de');assert.equal(i18n.number(12.5),'12,5');
-const html=['index.html','gamepad.html'].map(name=>fs.readFileSync(require('./ui_path.cjs')(name),'utf8')).join('\n');
+const html=['index.html'].map(name=>fs.readFileSync(require('./ui_path.cjs')(name),'utf8')).join('\n');
 for(const match of html.matchAll(/data-i18n(?:-title|-aria-label|-placeholder)?="([^"]+)"/g))assert.ok(Object.hasOwn(base,match[1]),'Unknown DOM key: '+match[1]);
 const app=['app.js','gamepad.js'].map(name=>fs.readFileSync(require('./ui_path.cjs')(name),'utf8')).join('\n');
 for(const match of app.matchAll(/\bt\('([^']+)'/g))assert.ok(Object.hasOwn(base,match[1]),'Unknown JS key: '+match[1]);

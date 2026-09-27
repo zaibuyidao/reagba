@@ -13,7 +13,7 @@ function fixture(child=false){
  const context={window,document,settings:{},defaultKeys:['J','K','Space','Return','D','A','W','S','Q','O'],state:{loaded:false},editing:()=>false,
   toast:message=>errors.push(message),createGameVideo:()=>({frame:()=>{frames++;},draw(){}}),queueMicrotask,requestAnimationFrame(){}};
  vm.runInNewContext(source,context);
- return {window,sent,requests,timers,events,runtime,errors,get frames(){return frames;},get focus(){return focus;}};
+ return {context,window,sent,requests,timers,events,runtime,errors,get frames(){return frames;},get focus(){return focus;}};
 }
 const flush=async()=>{for(let i=0;i<30;i++)await Promise.resolve();};
 (async()=>{
@@ -35,6 +35,25 @@ const flush=async()=>{for(let i=0;i<30;i++)await Promise.resolve();};
  f.events['dom:keydown']({code:'KeyJ',preventDefault(){}});f.events['dom:keyup']({code:'KeyJ',preventDefault(){}});
  assert.equal(f.sent.at(-2).payload.mask,1);assert.equal(f.sent.at(-1).payload.mask,0);
  f.events.blur();assert.equal(f.sent.at(-1).payload.active,false);
+ for(const childWindow of [false,true]){
+  const shortcuts=fixture(childWindow);await flush();shortcuts.context.state.loaded=true;
+  shortcuts.context.i18n={number:String,error:value=>value};shortcuts.context.t=key=>key;
+  const selected=[];shortcuts.window.onStateSlot=async slot=>selected.push(slot);
+  for(let slot=1;slot<=9;slot++)for(const save of [true,false]){
+   let prevented=false;
+   const event={code:'Digit'+slot,ctrlKey:save,shiftKey:!save,preventDefault(){prevented=true;}};
+   shortcuts.events['dom:keydown'](event);await flush();assert(prevented);
+   const cmd=shortcuts.requests.at(-1);assert.equal(cmd.method,save?'save_state':'load_state');assert.equal(cmd.payload.slot,slot);
+   const count=shortcuts.requests.length;shortcuts.events['dom:keydown']({...event,repeat:true});await flush();assert.equal(shortcuts.requests.length,count);
+   cmd.resolve(save?true:{loaded:true});await flush();assert.equal(selected.at(-1),slot);
+  }
+  const count=shortcuts.requests.length;
+  for(const modifiers of [{ctrlKey:true,shiftKey:true},{ctrlKey:true,altKey:true},{shiftKey:true,metaKey:true}])
+   shortcuts.events['dom:keydown']({code:'Digit1',...modifiers,preventDefault(){}});
+  shortcuts.context.editing=()=>true;shortcuts.events['dom:keydown']({code:'Digit1',ctrlKey:true,preventDefault(){}});
+  shortcuts.context.editing=()=>false;shortcuts.context.state.loaded=false;shortcuts.events['dom:keydown']({code:'Digit1',ctrlKey:true,preventDefault(){}});
+  await flush();assert.equal(shortcuts.requests.length,count,'editing, no game and extra modifiers do not save');
+ }
  const prefs=fixture();let saved=null;prefs.runtime.GetResourcePath=async()=>'/resource';
  const displayPath='/resource/Scripts/zaibuyidao Scripts/Modules/ReaGBA/config/ui.json';
  prefs.runtime.fs={stat:async path=>{assert.equal(path,displayPath);return {exists:!!saved};},readFile:async path=>{assert.equal(path,displayPath);return saved;},writeFile:async(path,text)=>{assert.equal(path,displayPath);saved=text;}};await flush();

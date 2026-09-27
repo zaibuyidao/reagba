@@ -21,8 +21,8 @@ EmulatorManager::EmulatorManager(fs::path romDir, fs::path dataDir)
     if (preferences_.contains("volume") && preferences_["volume"].is_number())
         volume.store(std::clamp(preferences_["volume"].get<float>(), 0.f, 1.f));
     fs::create_directories(romDir_);
-    if (!preferences_.contains("rom_directory") || !preferences_["rom_directory"].is_string())
-        preferences_["rom_directory"] = "";
+    if (!preferences_.contains("rom_directory") || !preferences_["rom_directory"].is_string() || preferences_["rom_directory"] == "")
+        preferences_["rom_directory"] = romDir_.u8string();
     NormalizeKeys(preferences_);
     try {
         preferences_["gamepad_bindings"] = NormalizeGamepadBindings(preferences_.value("gamepad_bindings", Json::object()));
@@ -249,6 +249,13 @@ void EmulatorManager::Run() {
                 break;
             requests.swap(queue_);
         }
+        uint32_t gamepadKeys;
+        {
+            std::lock_guard<std::mutex> lock(gamepadMutex_);
+            gamepadKeys = gamepad_.Apply(gamepadInput_,
+                std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now().time_since_epoch()).count(), gamepadRawInputs_);
+        }
+        gamepadFastForward_ = (gamepadKeys & GamepadFastForwardMask) != 0;
         for (auto &request : requests) {
             try {
                 request.reply({{"ok", true}, {"result", Handle(request.command)}});
@@ -258,12 +265,6 @@ void EmulatorManager::Run() {
         }
         const double speed = EffectiveSpeed();
         audible.store(running_ && speed == 1);
-        uint32_t gamepadKeys;
-        {
-            std::lock_guard<std::mutex> lock(gamepadMutex_);
-            gamepadKeys = gamepad_.Apply(gamepadInput_,
-                std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now().time_since_epoch()).count(), gamepadRawInputs_);
-        }
         if (!running_ || !core_) {
             next = Clock::now();
             meter = next;
@@ -271,7 +272,7 @@ void EmulatorManager::Run() {
             continue;
         }
         try {
-            appliedInput_ = keys_.load() | gamepadKeys;
+            appliedInput_ = keys_.load() | (gamepadKeys & 1023);
             if ((appliedInput_ & 0x30) == 0x30) appliedInput_ &= ~0x30u;
             if ((appliedInput_ & 0xc0) == 0xc0) appliedInput_ &= ~0xc0u;
             core_->SetInput(appliedInput_);

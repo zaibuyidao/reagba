@@ -16,7 +16,6 @@ reagba/web/
   popout.js
   game.html
   game.js
-  gamepad.html
   gamepad.js
 ```
 
@@ -35,11 +34,13 @@ reagba/web/
 
 默认按键：W/S/A/D 为方向，J/K 为 A/B，Q/O 为 R/L，回车为 Start，空格为 Select；按住 L 临时 4× 加速。支持自定义按键和 SDL GameController。编辑搜索、设置或失焦时释放游戏输入。默认音量 30%。
 
-v0.1.5 在设置页通过“配置手柄…”打开独立窗口。点击 GBA 操作旁的绑定项，再按下手柄按键即可录入，支持 SDL 报告的任意按钮编号、轴方向和方向帽，不要求设备具有标准 GameController 映射。每个 GBA 操作显示一个绑定按钮，点击后显示“请按键…”，识别输入后替换该操作的原有绑定并显示按键码。Esc 取消录入。录入前已按住的输入须松开后再按。
+v0.1.6 将手柄绑定放回设置页，采用与键盘映射一致的紧凑按钮和双列布局。点击 GBA 操作旁的绑定项，再按下手柄按键即可录入，支持 SDL 报告的任意按钮编号、轴方向和方向帽，不要求设备具有标准 GameController 映射。每个 GBA 操作显示一个绑定按钮，点击后显示“请按键…”，识别输入后替换该操作的原有绑定并显示按键码。Esc 取消录入。录入前已按住的输入须松开后再按。
 
-普通绑定采用标准按键行为，按住时保持，松开后释放。GBA A/B/L/R 的绑定可选开启 Turbo，每秒 10 次，按下和释放各 50 ms。手柄 X/Y 或任意其他输入绑定到这些动作时同样支持 Turbo。方向、Start、Select 保持标准行为。旧单次触发配置自动转为标准行为，按键绑定保留。
+普通绑定采用标准按键行为，按住时保持，松开后释放。普通 A/B 的下一行提供独立的“A 连发”“B 连发”绑定，可分别录入任意手柄按键，与普通 A/B 绑定互不替换。连发每秒 10 次，按下和释放各 50 ms。已有 A/B 连发配置显示在对应的连发项目中。L/R、方向、Start、Select 保持标准行为。“加速（按住）”可绑定任意手柄输入，按住时临时切换到 4×，松开后恢复所选速度。旧 L/R 连发配置转为标准行为。旧单次触发配置自动转为标准行为，按键绑定保留。
 
 默认 A/B 对应 GBA A/B，肩键对应 L/R，Back/Start 对应 Select/Start，方向键及左摇杆对应 GBA 方向。其余输入默认不绑定，默认采用标准按键行为。配置自动保存到 `config/preferences.json` 的 `gamepad_bindings`，下次启动自动恢复，可单独恢复默认手柄绑定。Windows、macOS、Linux 使用同一映射和触发逻辑。当前轮询首个可用手柄，配置为全局配置。原始编号由设备和驱动决定，更换手柄或平台后可能需要重新录入。
+
+游戏界面及弹出游戏窗口支持 `Ctrl+1` 至 `Ctrl+9` 保存到对应槽位，`Shift+1` 至 `Shift+9` 读取对应槽位。长按不重复触发，设置页、文字输入及未加载游戏时不触发。
 
 保留暂停/继续、重置、停止、1×/2×/4×、音量、跳帧、九个即时存档槽、电池存档、BMP 截图、最近游玩和可选封面下载。支持整数缩放、最近邻/线性过滤、LCD3X 和 lcd-grid-v2。显示和 Shader 在 WebView 内执行。
 
@@ -53,7 +54,7 @@ v0.1.5 在设置页通过“配置手柄…”打开独立窗口。点击 GBA �
 
 硬件设备、采样率和设备缓冲由 REAPER 管理。输出通道按当前设备的通道序号保存，列表随设备配置更新。所选通道不可用时保留设置并静音，恢复后自动重连。三种模式均自动校正长期时钟漂移，欠载后重新预缓冲，中断恢复时丢弃过期音频。无需手动设置重采样率。轨道 FX 和硬件缓冲仍会增加预听延迟。
 
-Windows、macOS 和 Linux 的核心数据统一位于 `<REAPER 资源目录>/Scripts/zaibuyidao Scripts/Modules/ReaGBA`，包含 `config/`、`cache/`、`saves/`、`screenshots/`、`states/` 和默认游戏目录 `roms/`。升级时将旧目录中的数据移至此处，将 `ROM/` 改名为 `roms/`，如已选择的游戏目录发生变化，请在设置中重新选择。WebView 的显示偏好通过 ReaWebAPI 写入 `config/ui.json`，首次使用会读取旧 `preferences.json` 中的显示偏好。窗口与浏览器数据由 ReaWebAPI 管理，旧宿主的 `window.json` 不再使用。
+Windows、macOS 和 Linux 的核心数据统一位于 `<REAPER 资源目录>/Scripts/zaibuyidao Scripts/Modules/ReaGBA`，包含 `config/`、`cache/`、`saves/`、`screenshots/`、`states/` 和默认游戏目录 `roms/`。首次使用时，“游戏文件夹”显示此目录下 `roms/` 的完整路径，已有自定义路径保持不变。升级时将旧目录中的数据移至此处，将 `ROM/` 改名为 `roms/`，如已选择的游戏目录发生变化，请在设置中重新选择。WebView 的显示偏好通过 ReaWebAPI 写入 `config/ui.json`，首次使用会读取旧 `preferences.json` 中的显示偏好。窗口与浏览器数据由 ReaWebAPI 管理，旧宿主的 `window.json` 不再使用。
 
 ## 构建
 
@@ -63,7 +64,7 @@ Windows、macOS 和 Linux 的核心数据统一位于 `<REAPER 资源目录>/Scr
 python scripts/build.py
 ```
 
-生成的 DLL 位于 `build/native/bin/Release/reaper_reagba-x64.dll`，安装组件和平台安装包只向 `UserPlugins` 安装核心二进制。`ReaGBA-ReaPack-v0.1.5.zip` 的 `ReaGBA/` 下包含 `extension/`、`web/` 和 `ReaGBA.ext`。界面在本仓库 `web/` 维护，不需要重新编译核心即可修改界面。
+生成的 DLL 位于 `build/native/bin/Release/reaper_reagba-x64.dll`，安装组件和平台安装包只向 `UserPlugins` 安装核心二进制。`ReaGBA-ReaPack-v0.1.6.zip` 的 `ReaGBA/` 下包含 `extension/`、`web/` 和 `ReaGBA.ext`。界面在本仓库 `web/` 维护，不需要重新编译核心即可修改界面。
 
 Linux 构建依赖为 C/C++ 工具链、CMake、pkg-config、SDL 音频/手柄所需开发库和 libcurl，不再要求 WebKitGTK。macOS 的 Objective-C/SWELL 支持仅用于 SDL 和 REAPER SDK 兼容，不包含窗口宿主。
 

@@ -26,7 +26,7 @@ function runtimeFixture(id){
   const context=await browser.newContext(),requests=[],errors=[];
   let nextId=1,child,ownerOpen=true,failOpen=false,failSave=false,ignoreSave=false,prefs={language:'en'},opens=0;
   let controller={connected:true,instance:9,inputs:[],aliases:{}};
-  const state={loaded:false,running:false,speed:1,base_speed:1,volume:.3,app_version:'0.1.5'};
+  const state={loaded:false,running:false,speed:1,base_speed:1,volume:.3,app_version:'0.1.6'};
   async function open(file){
    const page=await context.newPage(),id=nextId++;
    page.on('pageerror',error=>errors.push(error.message));
@@ -51,20 +51,11 @@ function runtimeFixture(id){
    return {page,id};
   }
   const main=await open('index.html'),page=main.page;
-  await page.waitForFunction(()=>document.getElementById('about-version').textContent==='0.1.5');
+  await page.waitForFunction(()=>document.getElementById('about-version').textContent==='0.1.6');
   await page.click('#settings-toggle');
-  assert.equal(await page.locator('#gamepad-bindings').count(),0);
-  async function show(){
-   await page.click('#open-gamepad-settings');
-   await page.waitForFunction(()=>!document.getElementById('open-gamepad-settings').disabled);
-   const gamepad=child.page;
-   await gamepad.waitForFunction(()=>document.querySelectorAll('#gamepad-bindings .gamepad-action').length===10);
-   return gamepad;
-  }
-  let gamepad=await show(),childId=child.id;
-  assert.equal(requests.find(r=>r.id===childId&&r.method==='attach').payload.owner,false);
-  assert.equal(requests.filter(r=>r.id===childId&&r.method==='streamOpen').length,0);
-  const pad=target=>gamepad.locator(`input[type=checkbox][data-target="${target}"]`);
+  let gamepad=page,childId=main.id;
+  const show=async()=>{await page.reload();await page.waitForFunction(()=>document.querySelectorAll('#gamepad-bindings .gamepad-action').length===13);await page.click('#settings-toggle');return page;};
+  const pad=target=>gamepad.locator(`.gamepad-source[data-target="${target}"]`);
   const settled=()=>gamepad.waitForFunction(()=>!document.getElementById('reset-gamepad').disabled);
   const bind=async(target,code,aliases={})=>{
    controller={connected:true,instance:9,inputs:[],aliases:{}};
@@ -74,29 +65,33 @@ function runtimeFixture(id){
    controller={connected:true,instance:9,inputs:[code],aliases};
    await settled();
   };
-  assert.equal(await gamepad.locator('.gamepad-target').count(),10);
-  assert.equal(await gamepad.locator('.gamepad-source').count(),10,'one binding button per GBA action');
-  assert.equal(await gamepad.locator('#gamepad-bindings button').count(),10,'no add or remove buttons');
-  assert.equal(await gamepad.locator('select').count(),0,'no preset input or trigger mode dropdown');
-  for(const source of ['select','start','up','down','left','right'])
-   assert.equal(await pad(source).count(),0,'non-action bindings have no Turbo control');
+  assert.equal(await gamepad.locator('.gamepad-target').count(),13);
+  assert.equal(await gamepad.locator('.gamepad-source').count(),13,'one binding button per GBA action');
+  assert.equal(await gamepad.locator('#gamepad-bindings button').count(),13,'no add or remove buttons');
+  assert.equal(await gamepad.locator('#gamepad-bindings select').count(),0,'no preset input or trigger mode dropdown');
+  assert.equal(await gamepad.locator('#gamepad-bindings input[type=checkbox]').count(),0,'no Turbo checkboxes');
+  assert.deepEqual((await gamepad.locator('.gamepad-target').allTextContents()).slice(0,4),['A','B','A Turbo','B Turbo']);
   await bind('a','button:40',{'button:40':['x']});
-  assert.equal(await pad('a').isChecked(),false,'new binding uses standard behavior');
-  await pad('a').check();await settled();
   await bind('b','button:41',{'button:41':['y']});
-  await pad('b').check();await settled();
-  await pad('b').uncheck();await settled();
-  assert.equal(prefs.gamepad_bindings['button:41'].mode,'hold','turning Turbo off restores standard behavior');
-  await pad('b').check();await settled();
+  await bind('a_turbo','button:45');
+  await bind('b_turbo','button:46');
+  assert.deepEqual(prefs.gamepad_bindings['button:40'],{target:'a',mode:'hold'});
+  assert.deepEqual(prefs.gamepad_bindings['button:41'],{target:'b',mode:'hold'});
+  assert.deepEqual(prefs.gamepad_bindings['button:45'],{target:'a',mode:'turbo'});
+  assert.deepEqual(prefs.gamepad_bindings['button:46'],{target:'b',mode:'turbo'});
+  await bind('a_turbo','button:47');
+  assert.equal(prefs.gamepad_bindings['button:45'].target,'none');
+  assert.equal(prefs.gamepad_bindings['button:40'].target,'a','Turbo rebinding preserves ordinary A');
   await bind('l','axis:3:-');
+  await bind('fast_forward','button:44');
+  assert.equal(prefs.gamepad_bindings['button:44'].target,'fast_forward');
   assert.equal(prefs.gamepad_bindings['button:40'].target,'a');
   assert.equal(prefs.gamepad_bindings.a.target,'none');
   await gamepad.keyboard.press('j');await gamepad.waitForTimeout(300);
-  assert.equal(requests.filter(r=>r.id===childId&&r.method==='input').length,0,'settings never sends game input');
-  await Promise.all([gamepad.waitForEvent('close'),gamepad.click('#close-gamepad-settings')]);
-  assert.ok(!page.isClosed(),'closing settings keeps main window');
+  assert.ok(requests.filter(r=>r.id===childId&&r.method==='input').every(r=>!r.payload.active),'settings blocks gameplay input');
   gamepad=await show();
-  assert.equal(await pad('a').isChecked(),true);assert.equal(await pad('b').isChecked(),true);
+  assert.equal(await pad('a').textContent(),'Button 40');assert.equal(await pad('b').textContent(),'Button 41');
+  assert.equal(await pad('a_turbo').textContent(),'Button 47');assert.equal(await pad('b_turbo').textContent(),'Button 46');
   assert.equal(await gamepad.locator('.gamepad-source[data-target=l]').textContent(),'Axis 3 -');
   // Inputs already held when capture starts must be released before they can bind.
   controller={connected:true,instance:9,inputs:['button:42'],aliases:{}};
@@ -112,13 +107,18 @@ function runtimeFixture(id){
   await gamepad.click('#cancel-gamepad-capture');await settled();
   for(const failure of ['reject','ignore']){
    failSave=failure==='reject';ignoreSave=failure==='ignore';
-   await pad('a').click();await settled();
-   assert.equal(await pad('a').isChecked(),true);
+   await bind('a_turbo','button:48');
+   assert.equal(await pad('a_turbo').textContent(),'Button 47');
+   assert.equal(await pad('a').textContent(),'Button 40');
    assert.ok(await gamepad.locator('#toast').evaluate(e=>e.classList.contains('error')));
   }
   failSave=ignoreSave=false;
   await gamepad.click('#reset-gamepad');await settled();
-  assert.equal(await pad('a').isChecked(),false);assert.equal(prefs.gamepad_bindings['button:40'],undefined);
+  assert.equal(await pad('a').textContent(),'A');assert.equal(prefs.gamepad_bindings['button:40'],undefined);
+  assert.equal(await pad('a_turbo').textContent(),await gamepad.evaluate(()=>t('gamepadBind')));
+  // Existing target/mode configurations populate the independent Turbo row unchanged.
+  prefs.gamepad_bindings['button:49']={target:'a',mode:'turbo'};
+  await show();assert.equal(await pad('a_turbo').textContent(),'Button 49');assert.equal(await pad('a').textContent(),'A');
   await bind('b','button:0',{'button:0':['a']});
   assert.equal(prefs.gamepad_bindings.a.target,'none','raw rebinding removes default alias to avoid dual actions');
   assert.equal(prefs.gamepad_bindings['button:0'].target,'b');
@@ -130,25 +130,37 @@ function runtimeFixture(id){
   assert.equal(prefs.gamepad_bindings['button:42'].target,'a','unbound target can be assigned directly');
   await bind('a','button:43');
   assert.equal(prefs.gamepad_bindings['button:42'].target,'none','rebinding replaces the previous raw input');
-  assert.equal(await pad('up').count(),0,'raw direction binding uses standard behavior');
-  const output=path.resolve(__dirname,'../verification/gamepad-window');fs.mkdirSync(output,{recursive:true});
+  assert.equal(prefs.gamepad_bindings['button:49'].mode,'turbo','normal rebinding preserves Turbo');
+  assert.equal(await pad('a_turbo').textContent(),'Button 49');
+  const output=path.resolve(__dirname,'../verification/gamepad-settings');fs.mkdirSync(output,{recursive:true});
   for(const language of ['en','zh-CN','zh-TW','ja','ko','es','de','fr']){
-   prefs.language=language;await gamepad.reload();await settled();
+   prefs.language=language;await show();await settled();
    await gamepad.waitForFunction(language=>document.documentElement.lang===language,language);
    for(const width of [240,320,760]){
     await gamepad.setViewportSize({width,height:700});
-    const fits=await gamepad.evaluate(()=>document.body.scrollWidth<=innerWidth&&document.querySelector('main').scrollWidth<=document.querySelector('main').clientWidth);
+    const fits=await gamepad.evaluate(()=>document.body.scrollWidth<=innerWidth&&document.getElementById('settings-view').scrollWidth<=document.getElementById('settings-view').clientWidth);
     assert.ok(fits,language+' '+width+' no horizontal overflow');
-    if(language==='zh-CN'&&width!==240)await gamepad.screenshot({path:path.join(output,`gamepad-${width}.png`)});
+    if(width===760){const rows=await gamepad.locator('#gamepad-bindings .gamepad-action').evaluateAll(rows=>rows.slice(0,4).map(row=>({x:row.offsetLeft,y:row.offsetTop})));assert.equal(rows[0].y,rows[1].y);assert.equal(rows[2].y,rows[3].y);assert.ok(rows[2].y>rows[0].y);assert.equal(rows[0].x,rows[2].x);assert.equal(rows[1].x,rows[3].x);await gamepad.locator('#gamepad-bindings').scrollIntoViewIfNeeded();assert.equal(await gamepad.locator('#gamepad-bindings').evaluate(e=>getComputedStyle(e).gridTemplateColumns.split(' ').length),2,await gamepad.locator('#gamepad-bindings').evaluate(e=>JSON.stringify({grid:getComputedStyle(e).gridTemplateColumns,display:getComputedStyle(e).display,rect:e.getBoundingClientRect()})));}
+    if(language==='zh-CN'&&width!==240){await gamepad.locator('#gamepad-bindings').scrollIntoViewIfNeeded();await gamepad.screenshot({path:path.join(output,`gamepad-${width}.png`)});}
    }
   }
-  await gamepad.close();failOpen=true;
-  const before=opens;await page.click('#open-gamepad-settings');
-  await page.waitForFunction(()=>!document.getElementById('open-gamepad-settings').disabled&&document.getElementById('toast').classList.contains('error'));
-  assert.equal(opens,before);failOpen=false;
-  gamepad=await show();await page.close();ownerOpen=false;
-  await gamepad.waitForEvent('close');
+  controller={connected:true,instance:9,inputs:[],aliases:{}};
+  await gamepad.locator('.gamepad-source[data-target=a]').click();
+  await gamepad.waitForFunction(()=>capture?.instance===9);
+  await page.click('#settings-toggle');
+  assert.equal(await gamepad.evaluate(()=>capture),null,'closing settings cancels capture');
+  state.loaded=true;state.game={title:'Shortcut test',hash:'shortcut',path:'test.gba',code:'TEST'};
+  await page.waitForFunction(()=>state.loaded);
+  for(let slot=1;slot<=9;slot++)for(const [modifier,method] of [['Control','save_state'],['Shift','load_state']]){
+   const before=requests.filter(r=>r.method===method).length;
+   await page.keyboard.press(modifier+'+Digit'+slot);
+   await page.waitForTimeout(80);
+   await page.waitForFunction(slot=>document.querySelector('#slots button[aria-pressed=true]').textContent===String(slot),slot);
+   assert.equal(requests.filter(r=>r.method===method).length,before+1,'one shortcut request');
+   assert.equal(requests.filter(r=>r.method===method).at(-1).payload.slot,slot);
+  }
+  assert.equal(opens,0,'gamepad settings never opens a window');
   assert.deepEqual(errors,[]);
-  console.log('PASS: independent settings, raw button/axis/hat capture, alias replacement, held-input guard, cancellation, modes/persistence/reset, errors, 8 languages, layout and lifecycle');
+  console.log('PASS: inline settings and fast-forward, raw button/axis/hat capture, alias replacement, held-input guard, cancellation, independent normal/Turbo bindings, legacy preferences, persistence/reset, errors, 8 languages, layout, capture cleanup and all 18 save/load shortcuts');
  }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 })().catch(error=>{console.error(error);process.exitCode=1;});

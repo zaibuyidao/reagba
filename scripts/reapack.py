@@ -5,10 +5,11 @@ import release
 CATEGORY='ReaGBA'
 PLATFORM_IDS={'windows-x64':'win64','macos-x86_64':'darwin64','macos-arm64':'darwin-arm64','linux-x86_64':'linux64','linux-aarch64':'linux-aarch64'}
 BASE_URL='https://raw.githubusercontent.com/zaibuyidao/ReaScripts/$commit/Modules/ReaGBA'
-WEB_FILES=('zaibuyidao_ReaGBA.lua','index.html','style.css','i18n.js','app.js','bridge.js','video.js','popout.js','game.html','game.js','gamepad.html','gamepad.js')
+WEB_FILES=('zaibuyidao_ReaGBA.lua','index.html','style.css','i18n.js','app.js','bridge.js','video.js','popout.js','game.html','game.js','gamepad.js')
 CHANGELOG=(
-    'Add a separate gamepad settings window with press-to-bind capture for raw buttons, axes and hats, including controllers without standard mappings.',
-    'Simplify bindings to one click-to-listen button per GBA action, with standard behavior and optional Turbo for A/B/L/R.',
+    'Move gamepad bindings into Settings with compact two-column controls, separately assignable A/B Turbo actions and configurable hold-to-fast-forward.',
+    'Add Ctrl+1 through Ctrl+9 to save states and Shift+1 through Shift+9 to load states in both game windows.',
+    'Rename ROM folder to Game folder and populate the default Modules/ReaGBA/roms path on first use.',
 )
 
 def sources():

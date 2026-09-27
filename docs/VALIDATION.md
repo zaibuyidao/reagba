@@ -1,5 +1,11 @@
 # Native Service / Frame Stream 验证 — 2026-09-26
 
+## v0.1.6 输入与设置验证 — 2026-09-27
+
+- Windows x64 的 9 项 CTest、Linux x86_64 与 macOS ARM64 的各 6 项 CTest 通过，macOS Intel 交叉编译通过。覆盖手柄加速的保持与释放、键盘加速叠加、速度恢复、绑定持久化和默认游戏目录迁移。
+- 浏览器验证设置页内嵌手柄绑定、独立 A/B 连发项及旧配置显示、普通与连发绑定互不替换、加速录入、紧凑双列布局、八种语言、保存失败回退及取消监听。共享输入测试覆盖主界面与游戏弹窗的全部 18 个存档快捷键、重复输入和编辑状态屏蔽。
+- 发布清单包含本次设置页资源，移除独立手柄页面。`ReaGBA.ext` 与 GitHub Release 共用仅含 v0.1.6 改动的日志。Linux ARM64 由现有 CI 构建，本地未生成该平台产物。未执行实体手柄测试。
+
 ## v0.1.5 版本与界面验证 — 2026-09-27
 
 - 8 项发布打包测试通过，校验包名、ReaPack 版本及发布日志生成。
@@ -68,7 +74,7 @@ node tests/frame_decode.cjs
 node tests/reaweb_video.cjs
 node tests/layout_verify.cjs
 node tests/popout_verify.cjs
-node tests/gamepad_window.cjs
+node tests/gamepad_settings.cjs
 ```
 
 前端测试默认读取本仓库 `web/`。浏览器测试需要 Playwright，可用 `REAGBA_NODE_MODULES` 指定模块目录，`REAGBA_BROWSER_CHANNEL=msedge` 使用本机 Edge。

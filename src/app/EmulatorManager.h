@@ -57,8 +57,9 @@ class EmulatorManager {
     std::vector<std::string> gamepadRawInputs_;
     GamepadBindings gamepad_;
     std::atomic<bool> fastForward_{false};
+    bool gamepadFastForward_ = false;
     uint32_t appliedInput_ = 0, observedInput_ = 0;
-    double EffectiveSpeed() const { return fastForward_.load() ? 4.0 : speed_; }
+    double EffectiveSpeed() const { return (fastForward_.load() || gamepadFastForward_) ? 4.0 : speed_; }
     std::unique_ptr<IEmulatorCore> core_;
     ROMInfo current_;
     SaveManager saves_;

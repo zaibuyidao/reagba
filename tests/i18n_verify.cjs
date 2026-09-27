@@ -98,7 +98,7 @@ const output=path.resolve(__dirname,'../verification/i18n');
   assert.ok(await page.locator('#toast').evaluate(e=>e.classList.contains('error')));
   ignoreLanguage=false;
   await page.selectOption('#language','ja');await page.waitForFunction(()=>document.documentElement.lang==='ja'&&!document.getElementById('language').disabled);
-  await page.click('#choose-rom-directory');assert.equal(requests.at(-1).dialog_title,'ReaGBA：ROMフォルダーを選択');
+  await page.click('#choose-rom-directory');assert.equal(requests.at(-1).dialog_title,'ReaGBA：ゲームフォルダーを選択');
   await page.click('#settings-toggle');await page.click('#shot');
   await page.waitForFunction(()=>document.getElementById('toast').textContent===window.ReaGBAI18n.t('errorROM'));
   await page.click('#open');assert.ok(requests.some(c=>c.action==='open_rom'&&c.dialog_title==='ReaGBA：GBA ROMを開く'));

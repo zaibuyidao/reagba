@@ -1,15 +1,9 @@
 'use strict';
-const $=id=>document.getElementById(id);
-const i18n=window.ReaGBAI18n,t=(key,values)=>i18n.t(key,values);
-const labels=['A','B','Select','Start','→','←','↑','↓','R','L'];
-let settings={},toastTimer;
-function toast(message,error=false){$('toast').textContent=message;$('toast').className='visible'+(error?' error':'');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').className='',3500);}
-async function call(action,values={}){if(!window.nativeRequest)throw Error(t('openInReaper'));const result=await window.nativeRequest({action,...values});if(!result.ok)throw Error(result.error?i18n.error(result.error):t('failed'));return result.result;}
-function run(fn){return async(...args)=>{try{await fn(...args);}catch(error){toast(error.message,true);}};}
-function make(tag,cls,text){const element=document.createElement(tag);if(cls)element.className=cls;if(text!==undefined)element.textContent=text;return element;}
-async function saveSettings(values){settings=await call('set_settings',{settings:values});}
 const gamepadSources=['a','b','x','y','back','guide','start','leftstick','rightstick','leftshoulder','rightshoulder','dpup','dpdown','dpleft','dpright','touchpad','leftup','leftdown','leftleft','leftright','rightup','rightdown','rightleft','rightright','lefttrigger','righttrigger'];
-const gamepadTargets=['a','b','select','start','right','left','up','down','r','l'];
+const gamepadTargets=['a','b','select','start','right','left','up','down','r','l','fast_forward'];
+const gamepadActions=['a','b','a_turbo','b_turbo',...gamepadTargets.slice(2)];
+const actionBinding=action=>({target:action.replace(/_turbo$/,''),mode:action.endsWith('_turbo')?'turbo':'hold'});
+function actionEntries(bindings,action){const binding=actionBinding(action);return Object.entries(bindings).filter(([,value])=>value.target===binding.target&&value.mode===binding.mode);}
 const gamepadDefaultTargets=['a','b','none','none','select','none','start','none','none','l','r','up','down','left','right','none','up','down','left','right','none','none','none','none','none','none'];
 function defaultGamepadBindings(){return Object.fromEntries(gamepadSources.map((source,i)=>[source,{target:gamepadDefaultTargets[i],mode:'hold'}]));}
 let gamepadSaving=false,capture=null,captureTimer=null;
@@ -22,20 +16,12 @@ function sourceLabel(source){
 function allBindings(){return {...defaultGamepadBindings(),...settings.gamepad_bindings};}
 function renderGamepad(){
  const bindings=allBindings();$('gamepad-bindings').replaceChildren();
- for(const target of gamepadTargets){
-  const row=make('div','gamepad-action'),name=labels[gamepadTargets.indexOf(target)],entries=Object.entries(bindings).filter(([,value])=>value.target===target);
+ for(const target of gamepadActions){
+  const row=make('div','key-pair gamepad-action'),name=target==='fast_forward'?t('holdFast'):target.endsWith('_turbo')?target[0].toUpperCase()+' '+t('gamepad_turbo'):labels[gamepadTargets.indexOf(target)],entries=actionEntries(bindings,target);
   const listening=capture?.target===target,caption=listening?t('pressKey'):entries.map(([source])=>sourceLabel(source)).join(' / ')||t('gamepadBind');
   const entry=make('div','gamepad-binding'),button=make('button','gamepad-source',caption);
   button.disabled=gamepadSaving||!!capture;button.dataset.target=target;button.setAttribute('aria-label',name+' · '+caption);button.onclick=run(()=>startCapture(target));
   button.classList.toggle('listening',listening);entry.append(button);
-  if(['a','b','l','r'].includes(target)){
-   const label=make('label','gamepad-turbo'),turbo=make('input','');
-   turbo.type='checkbox';turbo.dataset.target=target;turbo.checked=entries.some(([,value])=>value.mode==='turbo');
-   turbo.indeterminate=turbo.checked&&entries.some(([,value])=>value.mode!=='turbo');turbo.disabled=gamepadSaving||!!capture||!entries.length;
-   turbo.setAttribute('aria-label',name+' · '+t('gamepad_turbo'));
-   turbo.onchange=run(async()=>{const next=allBindings();for(const [source] of entries)next[source]={...next[source],mode:turbo.checked?'turbo':'hold'};await saveGamepad(next);});
-   label.append(turbo,make('span','',t('gamepad_turbo')));entry.append(label);
-  }else entry.classList.add('gamepad-plain');
   row.append(make('span','gamepad-target',name),entry);$('gamepad-bindings').append(row);
  }
  $('reset-gamepad').disabled=gamepadSaving||!!capture;
@@ -51,7 +37,7 @@ async function saveGamepad(bindings){
 }
 function cancelCapture(){clearTimeout(captureTimer);capture=null;$('gamepad-status').textContent='';renderGamepad();}
 async function startCapture(target){
- cancelCapture();
+ cancelCapture();binding=-1;renderKeys();
  capture={target,instance:null,previous:new Set(),expires:Date.now()+15000};renderGamepad();
  await pollCapture(capture);
 }
@@ -67,10 +53,10 @@ async function pollCapture(current){
    if(current.instance===input.instance){
     const source=input.inputs.find(code=>!current.previous.has(code));
     if(source){
-     const next=allBindings(),entries=Object.entries(next).filter(([,value])=>value.target===current.target),mode=entries.some(([,value])=>value.mode==='turbo')?'turbo':'hold';
+     const next=allBindings(),entries=actionEntries(next,current.target);
      for(const [previous] of entries)next[previous]={target:'none',mode:'hold'};
      for(const alias of input.aliases?.[source]||[])next[alias]={target:'none',mode:'hold'};
-     next[source]={target:current.target,mode};cancelCapture();await saveGamepad(next).catch(error=>toast(error.message,true));return;
+     next[source]=actionBinding(current.target);cancelCapture();await saveGamepad(next).catch(error=>toast(error.message,true));return;
     }
    }
    current.instance=input.instance;current.previous=held;
@@ -78,14 +64,10 @@ async function pollCapture(current){
   captureTimer=setTimeout(()=>pollCapture(current),50);
  }catch(error){if(capture!==current)return;cancelCapture();toast(error.message,true);}
 }
-$('cancel-gamepad-capture').onclick=cancelCapture;
-document.addEventListener('keydown',event=>{if(event.key==='Escape'&&capture){event.preventDefault();cancelCapture();}});
-window.addEventListener('blur',()=>{if(capture)cancelCapture();});
-window.addEventListener('pagehide',()=>{capture=null;clearTimeout(captureTimer);});
-$('reset-gamepad').onclick=run(()=>saveGamepad(defaultGamepadBindings()));
-$('close-gamepad-settings').onclick=run(()=>call('close_gamepad_settings'));
-initReaGBABridge();
-run(async()=>{
- settings=await call('get_settings');i18n.set(settings.language);document.documentElement.lang=i18n.language;i18n.apply();document.title='ReaGBA - '+t('gamepadTitle');
- renderGamepad();$('gamepad-bindings').hidden=false;
-})();
+function initGamepadBindings(){
+ $('cancel-gamepad-capture').onclick=cancelCapture;
+ document.addEventListener('keydown',event=>{if(event.key==='Escape'&&capture){event.preventDefault();cancelCapture();}});
+ window.addEventListener('blur',()=>{if(capture)cancelCapture();});
+ window.addEventListener('pagehide',()=>{capture=null;clearTimeout(captureTimer);});
+ $('reset-gamepad').onclick=run(()=>saveGamepad(defaultGamepadBindings()));
+}
