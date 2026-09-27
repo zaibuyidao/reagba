@@ -13,7 +13,7 @@ let coversLoading=false,coverRevision=0;
 function coverLetter(g){return Array.from((g.code||'').trim())[0]||Array.from(g.title||'')[0]||'G';}
 function fillCover(cover,g){
  cover.replaceChildren();cover.classList.remove('has-image');
- cover.append(make('b','',coverLetter(g)),make('span','','ADVANCE'));
+ cover.append(make('b','',coverLetter(g)),make('span','',g.system==='GB'?'GAME BOY':g.system==='GBC'?'COLOR':'ADVANCE'));
  cover.title=t('noCover',{code:g.code||t('unknown')});
  const source=coverCache.get(g.code)?.image;
  if(!source)return;
@@ -67,7 +67,7 @@ function renderGames(){
   const card=make('article','game'+(selected?.path===g.path?' selected':''));card.tabIndex=0;card.setAttribute('aria-label',g.title);card.dataset.path=g.path;
   const cover=make('div','cover');cover.dataset.code=g.code||'';cover.dataset.path=g.path;fillCover(cover,g);
   const info=make('div','game-info'),title=make('h2','',g.title);title.title=g.title;
-  info.append(title,make('span','tag','GBA'),make('div','game-meta',`${i18n.number(Math.round(g.size/1048576))} MB · ${g.play_seconds>=60?t('playTime',{count:i18n.number(Math.floor(g.play_seconds/60))}):t('noPlayTime')}`));
+  info.append(title,make('span','tag',g.system||'GBA'),make('div','game-meta',`${i18n.number(Math.round(g.size/1048576))} MB · ${g.play_seconds>=60?t('playTime',{count:i18n.number(Math.floor(g.play_seconds/60))}):t('noPlayTime')}`));
   const fav=make('button','favorite'+(g.favorite?' on':''),g.favorite?'★':'☆');fav.title=t(g.favorite?'unfavorite':'favorite');fav.setAttribute('aria-label',fav.title+' '+g.title);fav.setAttribute('aria-pressed',String(g.favorite));
   fav.onclick=run(async e=>{e.stopPropagation();await call('favorite',{path:g.path,value:!g.favorite});g.favorite=!g.favorite;renderGames();});
   const play=make('button','launch',t('play'));play.setAttribute('aria-label',t('playTitle',{title:g.title}));play.onclick=run(async e=>{e.stopPropagation();await playGame(g);});
@@ -80,7 +80,7 @@ function renderGames(){
 }
 async function scan(){games=await call('scan_roms');if(selected)selected=games.find(g=>g.path===selected.path)||null;if(!selected&&games.length)selected=games[0];renderGames();if(!state.loaded)$('toggle').disabled=!selected;void loadCovers();}
 async function playGame(g){selected=g;const s=await call('load_rom',{path:g.path});onNativeState(s);await refreshSlots();await scan();scheduleViewport();showKeyHint();}
-function renderState(s){if(s.app_version){$('about-version').textContent=s.app_version;$('footer-version').textContent='v'+s.app_version;}document.body.classList.toggle('playing',s.loaded);scheduleViewport();$('now-title').textContent=s.game?.title||selected?.title||t('chooseGame');$('now-subtitle').textContent=s.loaded?`${s.game.code} · 240 × 160 · ${s.core}`:'240 × 160 · Game Boy Advance';$('play-status').textContent=t(s.loaded?(s.running?'playing':'paused'):'ready');$('play-dot').className='dot'+(s.running?'':' idle');$('fps').textContent=s.running?`${i18n.number(s.fps,{minimumFractionDigits:1,maximumFractionDigits:1})} FPS`:'— FPS';$('speed').textContent=s.speed+'×';$('toggle').textContent=t(s.running?'pause':s.loaded?'resume':'start');$('toggle').disabled=!s.loaded&&!selected;for(const id of ['reset','shot','stop','save'])$(id).disabled=!s.loaded;$('load').disabled=!s.loaded||!slots.find(x=>x.slot===slot)?.exists;if('reaper' in s){$('dock-toggle').hidden=!s.reaper;$('dock-toggle').textContent=t(s.docked?'undock':'dock');$('fullscreen').hidden=!!s.reaper;}}
+function renderState(s){if(s.app_version){$('about-version').textContent=s.app_version;$('footer-version').textContent='v'+s.app_version;}document.body.classList.toggle('playing',s.loaded);scheduleViewport();$('now-title').textContent=s.game?.title||selected?.title||t('chooseGame');$('now-subtitle').textContent=s.loaded?`${s.game.code||s.game.system} · ${s.game.system==='GB'||s.game.system==='GBC'?'160 × 144':'240 × 160'} · ${s.core}`:'240 × 160 · Game Boy Advance';$('play-status').textContent=t(s.loaded?(s.running?'playing':'paused'):'ready');$('play-dot').className='dot'+(s.running?'':' idle');$('fps').textContent=s.running?`${i18n.number(s.fps,{minimumFractionDigits:1,maximumFractionDigits:1})} FPS`:'— FPS';$('speed').textContent=s.speed+'×';$('toggle').textContent=t(s.running?'pause':s.loaded?'resume':'start');$('toggle').disabled=!s.loaded&&!selected;for(const id of ['reset','shot','stop','save'])$(id).disabled=!s.loaded;$('load').disabled=!s.loaded||!slots.find(x=>x.slot===slot)?.exists;if('reaper' in s){$('dock-toggle').hidden=!s.reaper;$('dock-toggle').textContent=t(s.docked?'undock':'dock');$('fullscreen').hidden=!!s.reaper;}}
 window.onNativeState=function(s){const changed=state.game?.hash!==s.game?.hash;state=s;renderAudioStatus(s);if(s.game?.path)settings.last_rom_directory=parentDirectory(s.game.path);renderState(s);if(changed)run(refreshSlots)();if(s.error)toast(i18n.error(s.error),true);};
 $('dock-toggle').onclick=run(()=>call('toggle_dock'));
 $('popout').onclick=run(()=>call('popout'));

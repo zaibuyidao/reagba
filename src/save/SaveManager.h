@@ -4,7 +4,7 @@
 namespace reagba {
 void AtomicWrite(const fs::path &, const std::vector<uint8_t> &);
 void WriteJSON(const fs::path &, const Json &);
-void WriteScreenshot(const fs::path &, const Frame &);
+void WriteScreenshot(const fs::path &, const Frame &, EmulatorSystem = EmulatorSystem::GBA);
 class SaveManager {
     fs::path root_;
 

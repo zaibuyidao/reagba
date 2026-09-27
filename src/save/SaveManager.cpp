@@ -25,9 +25,12 @@ void WriteJSON(const fs::path &path, const Json &j) {
     auto s = j.dump(2);
     AtomicWrite(path, {s.begin(), s.end()});
 }
-void WriteScreenshot(const fs::path &path, const Frame &frame) {
+void WriteScreenshot(const fs::path &path, const Frame &frame, EmulatorSystem system) {
     // Uncompressed 24-bit BMP is portable and contains no proprietary metadata.
-    std::vector<uint8_t> out(54 + Width * Height * 3, 0);
+    const int width = system == EmulatorSystem::GBA ? Width : 160;
+    const int height = system == EmulatorSystem::GBA ? Height : 144;
+    const int left = (Width - width) / 2, top = (Height - height) / 2;
+    std::vector<uint8_t> out(54 + width * height * 3, 0);
     auto u32 = [&](size_t p, uint32_t n) {
         for (int i = 0; i < 4; ++i)
             out[p + i] = uint8_t(n >> (8 * i));
@@ -37,14 +40,14 @@ void WriteScreenshot(const fs::path &path, const Frame &frame) {
     u32(2, uint32_t(out.size()));
     u32(10, 54);
     u32(14, 40);
-    u32(18, Width);
-    u32(22, Height);
+    u32(18, width);
+    u32(22, height);
     out[26] = 1;
     out[28] = 24;
-    for (int y = 0; y < Height; ++y)
-        for (int x = 0; x < Width; ++x) {
-            uint32_t p = frame[(Height - 1 - y) * Width + x];
-            size_t i = 54 + (y * Width + x) * 3;
+    for (int y = 0; y < height; ++y)
+        for (int x = 0; x < width; ++x) {
+            uint32_t p = frame[(top + height - 1 - y) * Width + left + x];
+            size_t i = 54 + (y * width + x) * 3;
             out[i] = uint8_t(p >> 16);
             out[i + 1] = uint8_t(p >> 8);
             out[i + 2] = uint8_t(p);
@@ -73,7 +76,7 @@ void SaveManager::SaveSlot(IEmulatorCore &core, const ROMInfo &rom, int slot) {
     CheckSlot(slot);
     auto payload = core.SaveState();
     Json meta = {{"format", 1},
-                 {"system", "GBA"},
+                 {"system", SystemName(rom.system)},
                  {"core", core.Version()},
                  {"rom_sha256", rom.hash},
                  {"timestamp", std::time(nullptr)},
@@ -91,7 +94,7 @@ void SaveManager::SaveSlot(IEmulatorCore &core, const ROMInfo &rom, int slot) {
     AtomicWrite(state, bytes);
     auto picture = base;
     picture += ".bmp";
-    WriteScreenshot(picture, core.GetFrame());
+    WriteScreenshot(picture, core.GetFrame(), core.GetSystem());
     auto json = base;
     json += ".json";
     WriteJSON(json, meta);
@@ -108,7 +111,7 @@ void SaveManager::LoadSlot(IEmulatorCore &core, const ROMInfo &rom, int slot) {
     if (n > 65536 || 12ull + n >= bytes.size())
         throw std::runtime_error("Invalid save-state metadata size");
     auto meta = Json::parse(bytes.begin() + 12, bytes.begin() + 12 + n);
-    if (meta.at("format") != 1 || meta.at("system") != "GBA" || meta.at("core") != core.Version() ||
+    if (meta.at("format") != 1 || meta.at("system") != SystemName(rom.system) || meta.at("core") != core.Version() ||
         meta.at("rom_sha256") != rom.hash)
         throw std::runtime_error("Save state belongs to a different ROM or core version");
     std::vector<uint8_t> payload(bytes.begin() + 12 + n, bytes.end());

@@ -40,7 +40,7 @@ CoreCommands 保持原有核心命令结构；回复 ID 由适配层补回。已
 
 `service.send('input', {mask, fast, active})` 在主线程直接更新原子输入状态，不排入 ROM/存档命令队列。失焦或清理页面时释放输入，活跃页面每 200 ms 刷新输入有效期。750 ms 无刷新时自动释放。
 
-`reagba.video` 为 240×160、RGBA8、960-byte stride 的 Frame Stream。模拟线程发布完整二进制帧，使用三槽有界缓冲。页面卡顿时保留最新帧，WebGL 直接接收 Uint8Array。消费者关闭只解除自己的连接，生产者关闭时通知所有页面。同一窗口刷新或重新连接画面时可以读取暂停前的最后一帧；关闭主窗口后重新打开会创建空闲核心。
+`reagba.video` 为 240×160、RGBA8、960-byte stride 的 Frame Stream。模拟线程发布完整二进制帧，使用三槽有界缓冲。GB/GBC 的 160×144 像素位于该帧的 `(40, 8)` 起点，前端按游戏机型提取有效区域并保持原始比例。GBA 继续使用完整帧。页面卡顿时保留最新帧，WebGL 直接接收 Uint8Array。消费者关闭只解除自己的连接，生产者关闭时通知所有页面。同一窗口刷新或重新连接画面时可以读取暂停前的最后一帧；关闭主窗口后重新打开会创建空闲核心。
 
 `index.html` 与独立游戏页 `game.html` 共用 `bridge.js` 和 `video.js`。`popout.js` 使用同源存储中的窗口 ID 与短期心跳协调显示和输入归属。主窗口收回画面或关闭后，独立页自动关闭。独立页退出或心跳失效时主页面恢复画面，两者不创建额外核心会话。
 
@@ -72,7 +72,7 @@ WebView 使用 WebGL2 显示、整数缩放及原有 LCD 效果公式。参考�
 
 `InputManager` 同时读取 SDL Joystick 的原始按钮、轴和方向帽，对有标准映射的设备保留 GameController 默认绑定，轴阈值为 16000。宿主 timer 向 `EmulatorManager` 传递标准输入位及原始输入码，工作线程每个游戏帧执行 `GamepadBindings` 后与键盘输入合并，对向方向同时按下时抵消。`fast_forward` 使用内部位 10，与键盘加速合并后临时覆盖为 4×，不会传入 GBA 按键寄存器。普通绑定保持按下状态，连发使用单调时钟，周期 100 ms、占空比 50%。断开连接、失焦或输入超时将原始输入清零。
 
-`get_settings` / `set_settings` 复用 `gamepad_bindings` 字段。只读 Native Service 方法 `get_gamepad_input` 返回连接状态、设备名、实例 ID、当前原始输入码及对应的标准映射别名，供设置页录入。该方法在主线程轮询，不发送游戏输入。字段为以输入 ID 为键的对象，每项包含 `target` 和 `mode`。目标值为 `a/b/select/start/right/left/up/down/r/l/fast_forward/none`，模式为 `hold/turbo`，Turbo 仅用于 GBA A/B 目标。旧 `single` 配置及 A/B 以外的 Turbo 配置兼容读取并归一为 `hold`，保留源和目标。源 ID 支持 `button:<index>`、`axis:<index>:+/-`、`hat:<index>:1/2/4/8`，编号从 0 开始。标准默认源 ID 见 `src/input/GamepadBindings.h`。录入原始输入时，设置页清除同一实体输入的标准别名绑定，避免触发双重操作。提交该字段会替换整套绑定，缺省项补默认值，非法源、目标及模式被拒绝。未提交该字段时保留现有配置。启动时缺失或非法配置回退默认值。
+`get_settings` / `set_settings` 复用 `gamepad_bindings` 字段。只读 Native Service 方法 `get_gamepad_input` 返回连接状态、设备名、实例 ID、当前原始输入码及对应的标准映射别名，供设置页录入。该方法在主线程轮询，不发送游戏输入。字段为以输入 ID 为键的对象，每项包含 `target` 和 `mode`。目标值为 `a/b/select/start/right/left/up/down/r/l/fast_forward/none`，模式为 `hold/turbo`，Turbo 仅用于 A/B 目标。旧 `single` 配置及 A/B 以外的 Turbo 配置兼容读取并归一为 `hold`，保留源和目标。源 ID 支持 `button:<index>`、`axis:<index>:+/-`、`hat:<index>:1/2/4/8`，编号从 0 开始。标准默认源 ID 见 `src/input/GamepadBindings.h`。录入原始输入时，设置页清除同一实体输入的标准别名绑定，避免触发双重操作。提交该字段会替换整套绑定，缺省项补默认值，非法源、目标及模式被拒绝。未提交该字段时保留现有配置。启动时缺失或非法配置回退默认值。
 
 例如将原始按钮 40 设为标准 A、按钮 41 设为连发 B，其余输入保留默认值：
 
@@ -83,3 +83,9 @@ WebView 使用 WebGL2 显示、整数缩放及原有 LCD 效果公式。参考�
 主界面与弹出游戏页共用 `web/bridge.js` 的存档快捷键处理。`Ctrl+1…9` 调用 `save_state`，`Shift+1…9` 调用 `load_state`，过滤重复按键、额外修饰键和编辑状态，请求完成前不重复提交。主页面同步选中槽位和存档标记。
 
 键盘连发绑定使用 `turbo_keys: [A, B]` 保存，空字符串表示未绑定，旧配置缺失时补为空。`input` 消息增加可选 `turbo` 位掩码，位 0/1 表示 A/B 连发键的按住状态，缺省为 0。核心按与手柄相同的 100 ms 周期生成按下与释放，合并普通键盘和手柄输入。失焦、关闭设置及输入超时均释放连发输入，现有 `ReaGBA_SetInput` ABI 不变。
+
+## ROM 与存档机型
+
+游戏库递归扫描 `.gba`、`.gb`、`.gbc`，扩展名不区分大小写。GB/GBC 通过 mGBA 校验头部，并按 CGB 标志识别机型。`game.system` 和已加载状态的 `system` 返回 `GBA`、`GB` 或 `GBC`。GB/GBC 禁用 SGB 边框，不使用配置中的 GBA BIOS。按键位序与现有接口一致，GB/GBC 忽略 L/R。
+
+电池存档继续以 ROM SHA-256 命名，即时存档沿用原封装格式并记录机型，GBA 元数据保持兼容。GB/GBC 恢复电池存档时重新挂接 SRAM 文件，以更新存储映射和 RTC 数据。截图及槽位预览使用原始机型分辨率。封面查询仍仅适用于 GBA 游戏代码。

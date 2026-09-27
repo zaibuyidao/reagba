@@ -83,7 +83,7 @@ Json EmulatorManager::State() const {
             {"game", core_ ? current_.ToJson() : Json(nullptr)},
             {"app_version", REAGBA_VERSION},
             {"core", "mGBA 0.10.5"},
-            {"system", "GBA"},
+            {"system", core_ ? SystemName(current_.system) : "GBA"},
             {"error", lastError_}};
 }
 void EmulatorManager::Persist() {
@@ -202,7 +202,7 @@ Json EmulatorManager::Handle(const Json &cmd) {
         return State();
     }
     if (!core_)
-        throw std::runtime_error("Load a GBA ROM first");
+        throw std::runtime_error("Load a ROM first");
     if (action == "start")
         running_ = true;
     else if (action == "pause") {
@@ -237,7 +237,7 @@ Json EmulatorManager::Handle(const Json &cmd) {
     else if (action == "screenshot") {
         auto path = saves_.Root() / "screenshots" /
                     (current_.hash + "-" + std::to_string(std::time(nullptr)) + ".bmp");
-        WriteScreenshot(path, core_->GetFrame());
+        WriteScreenshot(path, core_->GetFrame(), core_->GetSystem());
         return path.u8string();
     } else
         throw std::runtime_error("Unknown action: " + action);

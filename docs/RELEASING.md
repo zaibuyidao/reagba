@@ -2,7 +2,7 @@
 
 | 仓库 | 职责 |
 | --- | --- |
-| reagba | GBA 核心、Native Service / Frame Stream 接入、`web/` 界面、测试和独立发布流程 |
+| reagba | GBA / GB / GBC 核心、Native Service / Frame Stream 接入、`web/` 界面、测试和独立发布流程 |
 | ReaWebAPI | 通用 WebView、Native Service、Native Stream 与平台能力 |
 | ReaScripts/Modules/ReaGBA | 维护者发布的 ReaPack 扩展与界面资源 |
 

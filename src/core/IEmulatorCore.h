@@ -10,7 +10,10 @@ constexpr int Width = 240, Height = 160, SampleRate = 32768;
 constexpr double NativeFPS = 16777216.0 / 280896.0;
 using Frame = std::array<uint32_t, Width * Height>; // byte order RGBA
 enum class Button : unsigned { A, B, Select, Start, Right, Left, Up, Down, R, L };
-enum class EmulatorSystem { GBA };
+enum class EmulatorSystem { GBA, GB, GBC };
+inline const char *SystemName(EmulatorSystem system) {
+    return system == EmulatorSystem::GB ? "GB" : system == EmulatorSystem::GBC ? "GBC" : "GBA";
+}
 class IEmulatorCore {
   public:
     virtual ~IEmulatorCore() = default;

@@ -1,4 +1,5 @@
 #pragma once
+#include "core/IEmulatorCore.h"
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -13,6 +14,7 @@ struct ROMInfo {
     std::string title, code, hash;
     size_t size = 0;
     bool headerChecksum = false;
+    EmulatorSystem system = EmulatorSystem::GBA;
     Json ToJson() const;
 };
 ROMInfo InspectROM(const fs::path &, bool hash = true);

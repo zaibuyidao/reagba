@@ -1,5 +1,11 @@
 # Native Service / Frame Stream 验证 — 2026-09-26
 
+## v0.1.8 GB/GBC 验证 — 2026-09-27
+
+- Windows x64 的 10 项 CTest 和 Linux x86_64 的 7 项 CTest 通过。新增原生测试使用原创 ROM，覆盖混合目录扫描、大小写扩展名、无效头部、GB/GBC 与兼容型彩色 ROM、160×144 画面、PCM 采样率、实际 JOYP 输入、L/R 屏蔽、SRAM/RTC 存档、即时存档和 GBA 切换。该测试已纳入所有平台的 CTest，macOS 与 Linux ARM64 本次未实机运行。
+- 浏览器测试覆盖 GB/GBC 有效画面裁切、原始比例、暂停画面重绘、GPU/CPU Shader 和 GBA 切换。现有 GBA 渲染器的 36 组 D3D 参考对比通过，最大通道差为 1/255。游戏库、GBA/GBC 弹窗、文件选择过滤器和八语言目录检查通过。
+- Windows 真实扩展通过 GBA 和 GBC 的 Native Service / Frame Stream 测试，覆盖输入、键盘连发、存读档、音频模式生命周期及卸载顺序。发布打包测试校验生成的 `ReaGBA.ext` 与 GitHub Release 正文共用本次更新日志。
+
 ## v0.1.7 映射与键盘连发验证 — 2026-09-27
 
 - 设置页测试覆盖两组映射的统一排列、方向文字、L/R 顺序、双列布局、键盘连发录入与重启恢复、默认设置恢复和十种窗口尺寸。
@@ -78,12 +84,15 @@ ctest --test-dir build/native -C Release --output-on-failure
 node tests/BridgeTests.cjs
 node tests/frame_decode.cjs
 node tests/reaweb_video.cjs
+node tests/gb_video.cjs
 node tests/layout_verify.cjs
 node tests/popout_verify.cjs
 node tests/gamepad_settings.cjs
 ```
 
 前端测试默认读取本仓库 `web/`。浏览器测试需要 Playwright，可用 `REAGBA_NODE_MODULES` 指定模块目录，`REAGBA_BROWSER_CHANNEL=msedge` 使用本机 Edge。
+
+`tests/popout_verify.cjs` 默认验证 GBA，可将 `REAGBA_TEST_SYSTEM` 设为 `GB` 或 `GBC` 复用弹窗回归。
 
 ```sh
 python tests/native_service_api.py --core build/native/bin/Release/reaper_reagba-x64.dll --rom /path/to/test.gba --output build/native-service-check

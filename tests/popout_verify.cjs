@@ -5,8 +5,8 @@ const server=http.createServer((req,res)=>{
  const file=require('./ui_path.cjs')(name);if(!fs.existsSync(file)){res.writeHead(404).end();return;}
  res.setHeader('Content-Type',name.endsWith('.js')?'text/javascript':name.endsWith('.css')?'text/css':'text/html');res.end(fs.readFileSync(file));
 });
-function runtimeFixture(id){
- const state={loaded:true,running:false,speed:1,base_speed:1,volume:.3,game:{hash:'test',title:'Test game',code:'TEST'},app_version:'0.1.1'};
+function runtimeFixture({id,system}){
+ const state={loaded:true,running:false,speed:1,base_speed:1,volume:.3,game:{hash:'test',title:'Test game',code:'TEST',system},app_version:'0.1.1'};
  let preferences={language:'en',integer_scaling:false,library_expanded:true},cleanup;
  window.sent=[];window.failOpen=false;
  const service={send:(method,payload)=>sent.push({method,payload}),invoke:async(method,payload)=>{
@@ -40,7 +40,7 @@ function runtimeFixture(id){
   async function open(file){
    const page=await context.newPage(),id=nextId++;
    page.on('pageerror',error=>errors.push(error.message));
-   await page.addInitScript(runtimeFixture,id);
+   await page.addInitScript(runtimeFixture,{id,system:process.env.REAGBA_TEST_SYSTEM||'GBA'});
    await page.exposeBinding('openGame',async(_,file)=>{child=await open(file);return child.id;});
    await page.exposeBinding('closeGame',()=>{setTimeout(()=>page.close().catch(()=>{}),0);return true;});
    await page.goto(`http://127.0.0.1:${server.address().port}/${file}`);

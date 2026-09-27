@@ -22,6 +22,7 @@ using VF = std::unique_ptr<VFile, CloseVF>;
 struct GBACore::Impl {
     mCore *core = nullptr;
     Frame pixels{};
+    EmulatorSystem system = EmulatorSystem::GBA;
     bool config = false;
     ~Impl() {
         if (core) {
@@ -46,9 +47,11 @@ GBACore::GBACore() : impl_(std::make_unique<Impl>()) {
 }
 GBACore::~GBACore() = default;
 void GBACore::LoadROM(const fs::path &path, const fs::path &bios) {
-    InspectROM(path, false);
+    const auto romInfo = InspectROM(path, false);
     impl_ = std::make_unique<Impl>();
-    auto *c = impl_->core = mCoreCreate(mPLATFORM_GBA);
+    impl_->system = romInfo.system;
+    const bool gba = impl_->system == EmulatorSystem::GBA;
+    auto *c = impl_->core = mCoreCreate(gba ? mPLATFORM_GBA : mPLATFORM_GB);
     if (!c)
         throw std::runtime_error("Could not allocate mGBA");
     if (!c->init(c)) {
@@ -61,11 +64,17 @@ void GBACore::LoadROM(const fs::path &path, const fs::path &bios) {
     mCoreConfigSetDefaultIntValue(&c->config, "sampleRate", SampleRate);
     mCoreConfigSetDefaultIntValue(&c->config, "audioBuffers", 1024);
     mCoreConfigSetDefaultIntValue(&c->config, "volume", 0x100);
-    mCoreConfigSetDefaultIntValue(&c->config, "useBios", bios.empty() ? 0 : 1);
+    mCoreConfigSetDefaultIntValue(&c->config, "useBios", gba && !bios.empty() ? 1 : 0);
     mCoreConfigSetDefaultIntValue(&c->config, "skipBios", 1);
+    if (!gba) {
+        mCoreConfigSetDefaultIntValue(&c->config, "sgb.borders", 0);
+        mCoreConfigSetDefaultValue(&c->config, "gb.model", "DMG");
+        mCoreConfigSetDefaultValue(&c->config, "sgb.model", "DMG");
+    }
     mCoreLoadConfig(c);
     static_assert(sizeof(color_t) == sizeof(uint32_t), "ReaGBA requires a 32-bit mGBA framebuffer");
-    c->setVideoBuffer(c, reinterpret_cast<color_t *>(impl_->pixels.data()), Width);
+    // Keep the existing 240x160 transport. GB/GBC occupy its centered 160x144 area.
+    c->setVideoBuffer(c, reinterpret_cast<color_t *>(impl_->pixels.data()) + (gba ? 0 : 8 * Width + 40), Width);
     c->setAudioBufferSize(c, 2048);
     auto bytes = ReadBytes(path, 32 * 1024 * 1024);
     VF rom(VFileMemChunk(bytes.data(), bytes.size()));
@@ -78,7 +87,7 @@ void GBACore::LoadROM(const fs::path &path, const fs::path &bios) {
     if (!save || !c->loadSave(c, save.get()))
         throw std::runtime_error("Could not attach cartridge save memory");
     save.release();
-    if (!bios.empty()) {
+    if (gba && !bios.empty()) {
         auto bytes = ReadBytes(bios, 16384);
         if (bytes.size() != 16384)
             throw std::runtime_error("GBA BIOS must be exactly 16384 bytes");
@@ -105,13 +114,15 @@ void GBACore::RunFrame() {
 }
 void GBACore::SetInput(uint32_t mask) {
     auto *c = impl_->core;
-    c->setKeys(c, mask & 1023);
+    c->setKeys(c, mask & (impl_->system == EmulatorSystem::GBA ? 1023 : 255));
 }
 const Frame &GBACore::GetFrame() const {
     return impl_->pixels;
 }
 uint32_t GBACore::ReadInput() const {
     auto *c = impl_->core;
+    if (impl_->system != EmulatorSystem::GBA)
+        return c->getKeys(c) & 255;
     return (~c->busRead16(c, 0x04000130)) & 1023; // GBA KEYINPUT is active-low.
 }
 std::vector<int16_t> GBACore::DrainAudio() {
@@ -158,10 +169,21 @@ std::vector<uint8_t> GBACore::SaveGame() {
 }
 void GBACore::LoadGameSave(const std::vector<uint8_t> &bytes) {
     auto *c = impl_->core;
+    if (impl_->system != EmulatorSystem::GBA) {
+        // Reattach GB SRAM so memory banks and RTC footer use the restored file.
+        VF save(VFileMemChunk(bytes.data(), bytes.size()));
+        if (!save || !c->loadSave(c, save.get()))
+            throw std::runtime_error("mGBA rejected battery save");
+        save.release();
+        return;
+    }
     if (!c->savedataRestore(c, bytes.data(), bytes.size(), true))
         throw std::runtime_error("mGBA rejected battery save");
 }
 std::string GBACore::Version() const {
     return "mGBA/0.10.5;ReaGBA-state/1";
+}
+EmulatorSystem GBACore::GetSystem() const {
+    return impl_->system;
 }
 } // namespace reagba

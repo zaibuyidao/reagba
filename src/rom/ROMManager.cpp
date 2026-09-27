@@ -1,4 +1,6 @@
 #include "rom/ROMManager.h"
+#include <mgba/gb/interface.h>
+#include <mgba-util/vfs.h>
 #include <fstream>
 #include <sstream>
 #include <iomanip>
@@ -76,27 +78,41 @@ std::string SHA256(const std::vector<uint8_t> &input) {
 Json ROMInfo::ToJson() const {
     return {
         {"path", path.u8string()},           {"title", title}, {"code", code}, {"hash", hash}, {"size", size},
-        {"header_checksum", headerChecksum}, {"system", "GBA"}};
+        {"header_checksum", headerChecksum}, {"system", SystemName(system)}};
 }
 ROMInfo InspectROM(const fs::path &path, bool hash) {
     auto ext = path.extension().u8string();
     std::transform(ext.begin(), ext.end(), ext.begin(),
                    [](unsigned char c) { return char(std::tolower(c)); });
-    if (ext != ".gba")
-        throw std::runtime_error("Only .gba ROMs are supported");
+    if (ext != ".gba" && ext != ".gb" && ext != ".gbc")
+        throw std::runtime_error("Only .gba, .gb and .gbc ROMs are supported");
     auto data = ReadBytes(path, 32 * 1024 * 1024);
-    if (data.size() < 192 || data[0xb2] != 0x96)
+    if (ext == ".gba" && (data.size() < 192 || data[0xb2] != 0x96))
         throw std::runtime_error("Invalid GBA ROM header");
     ROMInfo info;
     info.path = fs::absolute(path);
     info.size = data.size();
     info.title = path.stem().u8string();
-    for (int i = 0xac; i < 0xb0; ++i)
-        info.code += data[i] >= 32 && data[i] < 127 ? char(data[i]) : '?';
-    uint8_t checksum = 0;
-    for (int i = 0xa0; i <= 0xbc; ++i)
-        checksum -= data[i];
-    info.headerChecksum = uint8_t(checksum - 0x19) == data[0xbd];
+    if (ext == ".gba") {
+        for (int i = 0xac; i < 0xb0; ++i)
+            info.code += data[i] >= 32 && data[i] < 127 ? char(data[i]) : '?';
+        uint8_t checksum = 0;
+        for (int i = 0xa0; i <= 0xbc; ++i)
+            checksum -= data[i];
+        info.headerChecksum = uint8_t(checksum - 0x19) == data[0xbd];
+    } else {
+        auto *file = VFileFromConstMemory(data.data(), data.size());
+        const bool valid = file && GBIsROM(file);
+        if (file) file->close(file);
+        if (!valid)
+            throw std::runtime_error("Invalid GB/GBC ROM header");
+        info.system = (data[0x143] == 0x80 || data[0x143] == 0xc0) ? EmulatorSystem::GBC : EmulatorSystem::GB;
+        uint8_t checksum = 0;
+        for (int i = 0x134; i <= 0x14c; ++i)
+            checksum = uint8_t(checksum - data[i] - 1);
+        info.headerChecksum = checksum == data[0x14d];
+        // GB cartridges have no GBA game code. Leave cover lookup disabled.
+    }
     if (hash)
         info.hash = SHA256(data);
     return info;
@@ -118,7 +134,7 @@ Json ScanROMs(const fs::path &directory) {
         auto ext = i->path().extension().u8string();
         std::transform(ext.begin(), ext.end(), ext.begin(),
                        [](unsigned char c) { return char(std::tolower(c)); });
-        if (ext != ".gba")
+        if (ext != ".gba" && ext != ".gb" && ext != ".gbc")
             continue;
         try {
             out.push_back(InspectROM(i->path(), false).ToJson());

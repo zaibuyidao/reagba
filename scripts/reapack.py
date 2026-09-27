@@ -7,8 +7,8 @@ PLATFORM_IDS={'windows-x64':'win64','macos-x86_64':'darwin64','macos-arm64':'dar
 BASE_URL='https://raw.githubusercontent.com/zaibuyidao/ReaScripts/$commit/Modules/ReaGBA'
 WEB_FILES=('zaibuyidao_ReaGBA.lua','index.html','style.css','i18n.js','app.js','bridge.js','video.js','popout.js','game.html','game.js','gamepad.js')
 CHANGELOG=(
-    'Align keyboard and gamepad binding layouts: Up/Down/Left/Right text labels, L before R, and no direction arrows.',
-    'Add independently configurable A/B Turbo keyboard bindings with saved settings and native 10 Hz repeat.',
+    'Add GB/GBC ROM library scanning and playback on Windows, macOS and Linux, including input, audio, battery saves and save states.',
+    'Add native 160x144 GB/GBC display and screenshots.',
 )
 
 def sources():

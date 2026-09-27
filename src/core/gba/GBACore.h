@@ -18,6 +18,7 @@ class GBACore final : public IEmulatorCore {
     std::vector<uint8_t> SaveGame() override;
     void LoadGameSave(const std::vector<uint8_t> &) override;
     std::string Version() const override;
+    EmulatorSystem GetSystem() const override;
 
   private:
     struct Impl;

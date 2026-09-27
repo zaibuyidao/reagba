@@ -1,6 +1,6 @@
 # ReaGBA
 
-ReaGBA 是 REAPER 内的 **GBA 核心扩展**。扩展提供 mGBA 模拟、音频、游戏输入、ROM 游戏库、封面、存档和截图接口，不注册操作列表入口，也不创建或管理 WebView。
+ReaGBA 是 REAPER 内的 **GBA / GB / GBC 核心扩展**。扩展提供 mGBA 模拟、音频、游戏输入、ROM 游戏库、封面、存档和截图接口，不注册操作列表入口，也不创建或管理 WebView。
 
 界面位于本仓库的 `web/`，由 **ReaWebAPI v0.3.6.4+** 承载：
 
@@ -26,7 +26,9 @@ reagba/web/
 1. 完全退出 REAPER，将对应平台的 `reaper_reagba-<arch>.*` 放入 REAPER 资源目录的 `UserPlugins/`，并安装 ReaWebAPI v0.3.6.4 或更高版本的扩展。
 2. 将 ReaPack 压缩包中的 `ReaGBA/` 放入 `<REAPER 资源目录>/Scripts/zaibuyidao Scripts/Modules/`，保持 `ReaGBA/web/` 的所有文件在同一目录。
 3. 重启 REAPER，在操作列表加载并运行 `ReaGBA/web/zaibuyidao_ReaGBA.lua`。脚本描述为 **ReaGBA (ReaWebAPI)**。
-4. 点击“打开 ROM”，选择 `.gba` 文件；也可以在设置中选择 ROM 文件夹。
+4. 点击“打开 ROM”，选择 `.gba`、`.gb` 或 `.gbc` 文件，也可以在设置中选择 ROM 文件夹。
+
+GB/GBC 使用 mGBA 的 Game Boy 核心，按 ROM 头识别机型，以 160×144 原始比例显示。支持现有键盘、手柄、加速、音频输出、电池存档、即时存档和截图，L/R 对 GB/GBC 无效。GBA BIOS 设置仅用于 GBA。GB/GBC 暂不下载封面，显示占位图。GBA 的 240×160 显示和已有存档格式保持不变。
 
 旧原生入口 `zaibuyidao: ReaGBA` / `_REAGBA_SHOW` 已移除。已有快捷键、工具栏请绑定 Lua 脚本。重复执行启动脚本会激活同一窗口；启动脚本打开窗口后立即结束。关闭主窗口（窗口 X 或停靠分页 X）会停止模拟、保存电池存档并释放全部音频输出；关闭独立游戏窗口则收回主界面。输入超过 750 ms 未刷新会自动释放。
 
@@ -66,7 +68,7 @@ Windows、macOS 和 Linux 的核心数据统一位于 `<REAPER 资源目录>/Scr
 python scripts/build.py
 ```
 
-生成的 DLL 位于 `build/native/bin/Release/reaper_reagba-x64.dll`，安装组件和平台安装包只向 `UserPlugins` 安装核心二进制。`ReaGBA-ReaPack-v0.1.7.zip` 的 `ReaGBA/` 下包含 `extension/`、`web/` 和 `ReaGBA.ext`。界面在本仓库 `web/` 维护，不需要重新编译核心即可修改界面。
+生成的 DLL 位于 `build/native/bin/Release/reaper_reagba-x64.dll`，安装组件和平台安装包只向 `UserPlugins` 安装核心二进制。`ReaGBA-ReaPack-v0.1.8.zip` 的 `ReaGBA/` 下包含 `extension/`、`web/` 和 `ReaGBA.ext`。界面在本仓库 `web/` 维护，不需要重新编译核心即可修改界面。
 
 Linux 构建依赖为 C/C++ 工具链、CMake、pkg-config、SDL 音频/手柄所需开发库和 libcurl，不再要求 WebKitGTK。macOS 的 Objective-C/SWELL 支持仅用于 SDL 和 REAPER SDK 兼容，不包含窗口宿主。
 
