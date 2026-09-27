@@ -8,7 +8,8 @@ BASE_URL='https://raw.githubusercontent.com/zaibuyidao/ReaScripts/$commit/Module
 WEB_FILES=('zaibuyidao_ReaGBA.lua','index.html','style.css','i18n.js','app.js','bridge.js','video.js','popout.js','game.html','game.js','gamepad.js')
 CHANGELOG=(
     'Add GB/GBC ROM library scanning and playback on Windows, macOS and Linux, including input, audio, battery saves and save states.',
-    'Add native 160x144 GB/GBC display and screenshots.',
+    'Add native 160x144 GB/GBC display and screenshots, with a 10:9 resizable viewport.',
+    'Fix low-frequency distortion in GB/GBC audio resampling.',
 )
 
 def sources():

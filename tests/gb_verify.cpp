@@ -1,4 +1,5 @@
 #include "core/gba/GBACore.h"
+#include "core/gb/GBPCM.h"
 #include "app/EmulatorManager.h"
 #include <algorithm>
 #include <chrono>
@@ -56,6 +57,32 @@ static std::vector<uint8_t> Cartridge(uint8_t color, uint8_t mapper = 3) {
 static void Run(GBACore &core, int frames = 3) {
     for (int i = 0; i < frames; ++i) { core.RunFrame(); core.DrainAudio(); }
 }
+static void VerifyPCM() {
+    for (const double frequency : {110., 1024., 10000., 24000.}) {
+        GBPCM converter;
+        std::vector<int16_t> output;
+        for (int i = 0; i < 131072; ++i) {
+            const auto sample = int16_t(std::lround(10000 * std::sin(2 * 3.14159265358979323846 * frequency * i / 131072)));
+            converter.Push(sample, -sample);
+            if (i % 2194 == 0) {
+                auto block = converter.Drain(); output.insert(output.end(), block.begin(), block.end());
+            }
+        }
+        auto block = converter.Drain(); output.insert(output.end(), block.begin(), block.end());
+        Require(output.size() == 32768 * 2, "GB PCM rate or frame-boundary continuity");
+        double energy = 0;
+        for (size_t i = 2048; i < output.size(); i += 2) {
+            Require(output[i] == -output[i + 1], "GB PCM stereo isolation");
+            energy += double(output[i]) * output[i];
+        }
+        const auto rms = std::sqrt(energy / ((output.size() - 2048) / 2));
+        Require(frequency < 16000 ? rms > 7000 && rms < 7150 : rms < 8, "GB PCM passband or alias rejection");
+        converter.Push(10000, -10000); converter.Reset();
+        for (int i = 0; i < 512; ++i) converter.Push(0, 0);
+        block = converter.Drain();
+        Require(block.size() == 256 && std::all_of(block.begin(), block.end(), [](auto s) { return s == 0; }), "GB PCM reset retained old audio");
+    }
+}
 static void Verify(const fs::path &path, const fs::path &root, EmulatorSystem system) {
     const auto info = InspectROM(path);
     Require(info.system == system && info.headerChecksum && info.code.empty(), "GB ROM metadata");
@@ -63,12 +90,21 @@ static void Verify(const fs::path &path, const fs::path &root, EmulatorSystem sy
     core.LoadROM(path, root / "nonexistent-gba-bios.bin");
     Require(core.GetSystem() == system, "Selected core system");
     size_t samples = 0, nonzero = 0;
+    std::vector<int16_t> audio;
     for (int i = 0; i < 120; ++i) {
         core.RunFrame();
         const auto pcm = core.DrainAudio(); samples += pcm.size() / 2;
         nonzero += std::count_if(pcm.begin(), pcm.end(), [](int16_t s) { return s != 0; });
+        audio.insert(audio.end(), pcm.begin(), pcm.end());
     }
     Require(samples > 64000 && samples < 67000 && nonzero > 1000, "GB audio rate/tone");
+    // This cartridge holds a 512 Hz tone: each channel must repeat every 64 output samples.
+    double cycleError = 0;
+    for (size_t i = 32768; i < audio.size(); ++i) {
+        const double difference = double(audio[i]) - audio[i - 128];
+        cycleError += difference * difference;
+    }
+    Require(std::sqrt(cycleError / (audio.size() - 32768)) < 2, "GB steady tone contains low-frequency modulation");
     std::set<uint32_t> colors;
     const auto &frame = core.GetFrame();
     for (int y = 0; y < Height; ++y) for (int x = 0; x < Width; ++x) {
@@ -110,6 +146,7 @@ static void Verify(const fs::path &path, const fs::path &root, EmulatorSystem sy
 int main() {
     const auto root = fs::temp_directory_path() / ("reagba-gb-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     try {
+        VerifyPCM();
         fs::create_directories(root / "roms" / "nested");
         const auto gb = root / "roms" / "test.GB", gbc = root / "roms" / "nested" / "color.GbC";
         const auto hybrid = root / "roms" / "hybrid.gb", rtc = root / "roms" / "rtc.gb";

@@ -1,4 +1,5 @@
 #include "core/gba/GBACore.h"
+#include "core/gb/GBPCM.h"
 #include "rom/ROMManager.h"
 #include <mgba/core/core.h>
 #include <mgba/core/serialize.h>
@@ -18,12 +19,21 @@ struct CloseVF {
     }
 };
 using VF = std::unique_ptr<VFile, CloseVF>;
+struct GBPCMStream : mAVStream {
+    GBPCM pcm;
+    GBPCMStream() : mAVStream{} {
+        postAudioFrame = [](mAVStream* stream, int16_t left, int16_t right) {
+            static_cast<GBPCMStream*>(stream)->pcm.Push(left, right);
+        };
+    }
+};
 } // namespace
 struct GBACore::Impl {
     mCore *core = nullptr;
     Frame pixels{};
     EmulatorSystem system = EmulatorSystem::GBA;
     bool config = false;
+    GBPCMStream gbAudio;
     ~Impl() {
         if (core) {
             if (config)
@@ -76,6 +86,7 @@ void GBACore::LoadROM(const fs::path &path, const fs::path &bios) {
     // Keep the existing 240x160 transport. GB/GBC occupy its centered 160x144 area.
     c->setVideoBuffer(c, reinterpret_cast<color_t *>(impl_->pixels.data()) + (gba ? 0 : 8 * Width + 40), Width);
     c->setAudioBufferSize(c, 2048);
+    if (!gba) c->setAVStream(c, &impl_->gbAudio);
     auto bytes = ReadBytes(path, 32 * 1024 * 1024);
     VF rom(VFileMemChunk(bytes.data(), bytes.size()));
     if (!rom || !c->loadROM(c, rom.get()))
@@ -107,6 +118,7 @@ void GBACore::Reset() {
         blip_clear(b);
     }
     c->setKeys(c, 0);
+    if (impl_->system != EmulatorSystem::GBA) impl_->gbAudio.pcm.Reset();
 }
 void GBACore::RunFrame() {
     auto *c = impl_->core;
@@ -129,6 +141,14 @@ std::vector<int16_t> GBACore::DrainAudio() {
     auto *c = impl_->core;
     auto *l = c->getAudioChannel(c, 0);
     auto *r = c->getAudioChannel(c, 1);
+    if (impl_->system != EmulatorSystem::GBA) {
+        // Keep mGBA's legacy buffers drained while using its pre-blip GB PCM.
+        std::array<int16_t, 2048> discarded{};
+        for (auto* channel : {l, r})
+            while (const auto count = blip_samples_avail(channel))
+                blip_read_samples(channel, discarded.data(), std::min(count, int(discarded.size())), 0);
+        return impl_->gbAudio.pcm.Drain();
+    }
     int count = std::min(blip_samples_avail(l), blip_samples_avail(r));
     std::vector<int16_t> samples(size_t(count) * 2);
     if (count) {
@@ -156,6 +176,7 @@ void GBACore::LoadState(const std::vector<uint8_t> &bytes) {
         throw std::runtime_error("mGBA could not restore state");
     for (int i = 0; i < 2; ++i)
         blip_clear(impl_->core->getAudioChannel(impl_->core, i));
+    if (impl_->system != EmulatorSystem::GBA) impl_->gbAudio.pcm.Reset();
 }
 std::vector<uint8_t> GBACore::SaveGame() {
     void *data = nullptr;

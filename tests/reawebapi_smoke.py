@@ -37,7 +37,9 @@ rom[0xa0:0xac]=b'REAGBA TEST ';rom[0xac:0xb0]=b'TEST';rom[0xb2]=0x96
 rom[0xbd]=(-sum(rom[0xa0:0xbd])-0x19)&255
 code=[0xe3a00301,0xe3a01003,0xe3811b01,0xe1c010b0,0xe3a00406,0xe3a0101f,0xe3a02c96,0xe0c010b2,0xe2522001,0x1afffffc,0xeafffffe]
 for i,value in enumerate(code):struct.pack_into('<I',rom,0xc0+i*4,value)
-(root/'fixture.gba').write_bytes(a.rom.read_bytes() if a.rom else rom)
+fixture='fixture'+(a.rom.suffix.lower() if a.rom else '.gba')
+(root/fixture).write_bytes(a.rom.read_bytes() if a.rom else rom)
+(root/'fixture-name.txt').write_text(fixture,encoding='utf-8')
 env={k.upper():v for k,v in os.environ.items()}
 startup=None
 if os.name=='nt':

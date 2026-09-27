@@ -145,8 +145,9 @@ $('volume').oninput=()=>$('volume-value').textContent=$('volume').value+'%';$('v
 $('integer').onchange=run(()=>saveSettings({integer_scaling:$('integer').checked}));$('vsync').onchange=run(()=>saveSettings({vsync:$('vsync').checked}));$('filter').onchange=run(()=>saveSettings({filter:$('filter').value}));$('skip').onchange=run(()=>call('set_frame_skip',{value:Number($('skip').value)}));$('save-bios').onclick=run(async()=>{await saveSettings({bios:$('bios').value.trim()});toast(t('biosSaved'));});
 $('choose-rom-directory').onclick=run(async()=>{const chosen=await call('select_rom_directory',{dialog_title:t('dialogFolder'),initial_path:settings.rom_directory||''});if(!chosen)return;settings=chosen;$('rom-directory').value=settings.rom_directory||'';await scan();toast(t('folderSaved'));});
 
-// The library takes surplus height; the game rectangle always stays 3:2.
-let libraryPreference=null,splitDrag=null,paneBounds=null,splitSaveTimer,gameHeight=null,layoutWidth=0;
+// The library takes surplus height; the game rectangle follows the active system.
+let libraryPreference=null,splitDrag=null,paneBounds=null,splitSaveTimer,gameHeight=null,layoutWidth=0,layoutAspect=1.5;
+const gameAspect=()=>state.loaded&&(state.game?.system==='GB'||state.game?.system==='GBC')?160/144:1.5;
 const splitKey=()=>'library_split';
 const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
 function setPixels(element,property,value){const next=Math.max(0,value)+'px';if(element.style[property]!==next)element.style[property]=next;}
@@ -172,7 +173,10 @@ function sizePanes(){
  document.body.classList.toggle('library-collapsed',!expanded);
  const chrome=headingHeight+controlsHeight+workspaceGap;
  if(layoutWidth!==innerWidth){gameHeight=null;layoutWidth=innerWidth;}
- const screenMax=stage.clientWidth/1.5;
+ const aspect=gameAspect();
+ if(layoutAspect!==aspect){gameHeight=null;layoutAspect=aspect;}
+ document.body.classList.toggle('gb-game',aspect!==1.5);
+ const screenMax=stage.clientWidth/aspect;
  const minPlayer=chrome+(gameHeight??64),maxPlayer=chrome+(gameHeight??screenMax);
  $('library-toggle').textContent=t(expanded?'collapseLibrary':'expandLibrary');$('library-toggle').setAttribute('aria-expanded',String(expanded));
  if(expanded){
@@ -188,9 +192,9 @@ function sizePanes(){
    library.style.height='auto';paneBounds=null;
    setPixels(player,'height',Math.max(minPlayer,available-outerHeight(library)));
  }
- const bounds=stage.getBoundingClientRect(),width=Math.max(0,Math.min(bounds.width,(gameHeight??bounds.height)*1.5));
- setPixels($('game-viewport'),'width',width);setPixels($('game-viewport'),'height',width/1.5);
- gameHeight=width/1.5;
+ const bounds=stage.getBoundingClientRect(),width=Math.max(0,Math.min(bounds.width,(gameHeight??bounds.height)*aspect));
+ setPixels($('game-viewport'),'width',width);setPixels($('game-viewport'),'height',width/aspect);
+ gameHeight=width/aspect;
 }
 function changeSplit(height){if(!paneBounds)return;settings[splitKey()]=clamp(height,paneBounds.min,paneBounds.max)/paneBounds.total;gameHeight=null;scheduleViewport();}
 function persistSplit(){clearTimeout(splitSaveTimer);const key=splitKey(),value=settings[key];return saveSettings({[key]:value});}

@@ -1,6 +1,7 @@
 // Real REAPER verification of the native service, binary stream and existing UI.
 (async()=>{
  const root=await reaper.GetResourcePath(),checks=[],metrics={};
+ const fixturePath=root+'/'+await reaper.fs.readText(root+'/fixture-name.txt');
  const sleep=ms=>new Promise(r=>setTimeout(r,ms));
  const wait=async(test,label)=>{const end=Date.now()+12000;while(!await test()){if(Date.now()>end)throw Error('Timeout: '+label);await sleep(30);}checks.push(label);};
  const check=(ok,label)=>{if(!ok)throw Error(label);checks.push(label);};
@@ -13,12 +14,12 @@
    check(settings.language==='zh-CN'&&settings.shader==='lcd-grid-v2','UI preferences persist: '+settings.language+' / '+settings.shader);
    const reopened=await service.invoke('getState');
    check(!reopened.loaded&&!reopened.running,'closed main window released the core');
-   await service.invoke('loadRom',{path:root+'/fixture.gba'});
+   await service.invoke('loadRom',{path:fixturePath});
    const video=await reaper.stream.open('reagba.video');
    await wait(()=>video.latest(),'fresh frame after window reopen');
    await service.invoke('loadState',{slot:1});await service.invoke('resume');await sleep(200);
    await service.invoke('closeRom');check(!(await service.invoke('getState')).loaded,'close ROM');
-   await service.invoke('loadRom',{path:root+'/fixture.gba'});await wait(()=>video.latest().sequence>1n,'reload ROM');
+   await service.invoke('loadRom',{path:fixturePath});await wait(()=>video.latest().sequence>1n,'reload ROM');
    await service.invoke('reset');await service.invoke('pause');await video.close();
    await reaper.fs.writeText(root+'/result.json',JSON.stringify({ok:true,checks,metrics:JSON.parse(await reaper.GetExtState('ReaGBA.test','metrics'))}));return;
   }
@@ -28,6 +29,8 @@
   await wait(()=>video.latest()&&document.getElementById('game-frame'),'native framebuffer');
   check(video.info.width===240&&video.info.height===160&&video.latest().bytes.length===153600,'RGBA frame metadata');
   await sleep(300);const canvas=document.getElementById('game-frame'),gl=canvas.getContext('webgl2');check(gl&&gl.getError()===gl.NO_ERROR,'existing WebGL renderer');
+  const system=(await service.invoke('getState')).system,viewport=document.getElementById('game-viewport').getBoundingClientRect();
+  check(Math.abs(viewport.width/viewport.height-(system==='GB'||system==='GBC'?160/144:1.5))<.01,'native system viewport ratio');
   check(video.latest().bytes.some((v,i)=>i%4!==3&&v>0),'ROM pixels present');
   await call('focus_game');await wait(()=>document.hasFocus(),'WebView focus');
   document.dispatchEvent(new KeyboardEvent('keydown',{code:'KeyJ',key:'j',bubbles:true}));

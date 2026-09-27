@@ -5,6 +5,9 @@
 - Windows x64 的 10 项 CTest 和 Linux x86_64 的 7 项 CTest 通过。新增原生测试使用原创 ROM，覆盖混合目录扫描、大小写扩展名、无效头部、GB/GBC 与兼容型彩色 ROM、160×144 画面、PCM 采样率、实际 JOYP 输入、L/R 屏蔽、SRAM/RTC 存档、即时存档和 GBA 切换。该测试已纳入所有平台的 CTest，macOS 与 Linux ARM64 本次未实机运行。
 - 浏览器测试覆盖 GB/GBC 有效画面裁切、原始比例、暂停画面重绘、GPU/CPU Shader 和 GBA 切换。现有 GBA 渲染器的 36 组 D3D 参考对比通过，最大通道差为 1/255。游戏库、GBA/GBC 弹窗、文件选择过滤器和八语言目录检查通过。
 - Windows 真实扩展通过 GBA 和 GBC 的 Native Service / Frame Stream 测试，覆盖输入、键盘连发、存读档、音频模式生命周期及卸载顺序。发布打包测试校验生成的 `ReaGBA.ext` 与 GitHub Release 正文共用本次更新日志。
+- GB/GBC 音频回归验证 512 Hz 定音的周期稳定性，旧实现无法通过该检查。新增检查覆盖 131072→32768 Hz 转换、左右声道、通带、抗混叠、跨帧连续性及重置。用户提供的《Oracle of Ages》在 Windows 模拟线程中运行约 27 秒，修复后的播放测试未出现音频欠载或缓冲重同步。
+- 主界面布局分别验证 GBA、GB、GBC 的八组窗口尺寸、分隔条拖拽、折叠、重开和机型切换。GB/GBC 使用 10:9，GBA 保持 3:2。
+- Windows 隔离 REAPER 的 GBC 定音测试通过硬件输出、指定轨道、选中轨道、音量、声像、FX、静音、路由、设备重启及系统输出切换检查。
 
 ## v0.1.7 映射与键盘连发验证 — 2026-09-27
 
@@ -92,11 +95,11 @@ node tests/gamepad_settings.cjs
 
 前端测试默认读取本仓库 `web/`。浏览器测试需要 Playwright，可用 `REAGBA_NODE_MODULES` 指定模块目录，`REAGBA_BROWSER_CHANNEL=msedge` 使用本机 Edge。
 
-`tests/popout_verify.cjs` 默认验证 GBA，可将 `REAGBA_TEST_SYSTEM` 设为 `GB` 或 `GBC` 复用弹窗回归。
+`tests/layout_verify.cjs` 和 `tests/popout_verify.cjs` 默认验证 GBA，可将 `REAGBA_TEST_SYSTEM` 设为 `GB` 或 `GBC` 复用布局和弹窗回归。
 
 ```sh
 python tests/native_service_api.py --core build/native/bin/Release/reaper_reagba-x64.dll --rom /path/to/test.gba --output build/native-service-check
 python tests/reawebapi_smoke.py --reaper C:/REAPER/reaper.exe --reawebapi ../ReaWebAPI/build/Release/reaper_reawebapi-x64.dll --rom /path/to/test.gba --audio-config C:/REAPER/reaper.ini --output build/native-ui-check
 ```
 
-输出目录必须尚不存在。实机测试只创建隔离 REAPER 配置，不替换已安装扩展、日常配置或项目。`--rom` 省略时，界面测试生成一个简单的原创 ARM 测试程序。帧率与兼容性结论使用实际 Apotris ROM，不分发该 ROM。
+输出目录必须尚不存在。实机测试只创建隔离 REAPER 配置，不替换已安装扩展、日常配置或项目。界面测试的 `--rom` 接受 `.gba`、`.gb`、`.gbc`，省略时生成一个简单的原创 ARM 测试程序。`tests/audio_host_verify.py --rom` 可使用持续定音 ROM 检查 GB/GBC 的音频路由，默认仍使用原有 GBA 定音。实际游戏测试使用用户提供的 ROM，不分发这些 ROM。

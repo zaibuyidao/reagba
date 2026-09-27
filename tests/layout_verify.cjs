@@ -5,12 +5,15 @@ const moduleRoot = process.env.REAGBA_NODE_MODULES || rootModules();
 function rootModules(){return path.resolve(__dirname,'..','node_modules');}
 const { chromium } = require(require.resolve('playwright', { paths: [moduleRoot] }));
 const root = path.resolve(__dirname, '..');
-const output = path.join(root, 'verification/responsive');
+const system = process.env.REAGBA_TEST_SYSTEM || 'GBA';
+assert.ok(['GBA','GB','GBC'].includes(system));
+const aspect = system === 'GBA' ? 1.5 : 160/144;
+const output = path.join(root, 'verification/responsive'+(system==='GBA'?'':'-'+system.toLowerCase()));
 fs.mkdirSync(output, { recursive: true });
 const mock = `
 window.preferences={keys:['J','K','Space','Return','D','A','W','S','E','Q'],fast_forward_key:'R',layout:'horizontal',rom_directory:'C:/ROM',...JSON.parse(localStorage.getItem('reagba-test-settings')||'{}')};
 window.requests=[];
-const fixture={loaded:true,running:true,fps:59.7,speed:1,base_speed:1,volume:.7,app_version:'0.0.2',core:'mGBA 0.10.5',game:{hash:'fixture',code:'TEST',title:'GBA 布局测试',path:'C:/ROM/fixture.gba'},reaper:true,docked:true};
+window.fixture={loaded:true,running:true,fps:59.7,speed:1,base_speed:1,volume:.7,app_version:'0.0.2',core:'mGBA 0.10.5',game:{system:'${system}',hash:'fixture',code:'TEST',title:'${system} 布局测试',path:'C:/ROM/fixture.${system.toLowerCase()}'},reaper:true,docked:true};
 window.nativeRequest=async cmd=>{requests.push(cmd);let result=true;
 if(cmd.action==='get_settings')result=preferences;
 if(cmd.action==='set_settings'){result=preferences={...preferences,...cmd.settings};localStorage.setItem('reagba-test-settings',JSON.stringify(preferences));}
@@ -38,11 +41,11 @@ const entry = 'file:///'+require('./ui_path.cjs')('index.html').replaceAll('\\',
             await page.waitForFunction(()=>document.body.classList.contains('playing'));
             await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
             const metrics=await page.evaluate(()=>layoutMetrics());
-            assert.ok(metrics.game.height>=64 && metrics.game.width>=96,JSON.stringify(metrics));
+            assert.ok(metrics.game.height>=63.99 && metrics.game.width>=64*aspect-.01,JSON.stringify(metrics));
             assert.ok(metrics.save.bottom<=height-24,'save button visible '+JSON.stringify(metrics));
             assert.ok(metrics.load.bottom<=height-24,'load button visible');
             if(metrics.libraryExpanded)assert.ok(Math.abs(metrics.load.bottom-metrics.mainBottom)<22,'expanded library uses remaining height');
-            assert.ok(Math.abs(metrics.game.width/metrics.game.height-1.5)<.01,'game canvas keeps 3:2 without oversized black bars');
+            assert.ok(Math.abs(metrics.game.width/metrics.game.height-aspect)<.01,'game canvas keeps native aspect ratio');
             assert.ok(metrics.scrollHeight<=metrics.clientHeight+2,'normal dock size needs no page scrolling');
             assert.ok(await page.evaluate(()=>document.body.scrollWidth<=innerWidth+1),'no horizontal page overflow');
             const orientation=await page.evaluate(()=>{const g=document.getElementById('game-viewport').getBoundingClientRect(),p=document.querySelector('.player-controls').getBoundingClientRect();return {gameRight:g.right,gameBottom:g.bottom,controlsX:p.x,controlsY:p.y};});
@@ -53,7 +56,7 @@ const entry = 'file:///'+require('./ui_path.cjs')('index.html').replaceAll('\\',
                 const visible=await page.evaluate(()=>{const list=document.getElementById('games').getBoundingClientRect();return [...document.querySelectorAll('.game')].filter(card=>{const r=card.getBoundingClientRect();return r.top>=list.top&&r.bottom<=list.bottom;}).length;});
                 assert.ok(visible>=4,'tall narrow Docker shows at least four complete detail cards');
                 metrics.fullyVisibleCards=visible;
-                assert.ok(metrics.game.height<200,'narrow game background is compact');
+                assert.ok(metrics.game.height<300/aspect,'narrow game background is compact');
             }
             results.push(metrics);
         }
@@ -109,9 +112,9 @@ const entry = 'file:///'+require('./ui_path.cjs')('index.html').replaceAll('\\',
         const saved=await page.evaluate(()=>({...preferences}));
         assert.ok(saved.library_split>0,'split persisted through native settings bridge');
         const zoomed=await drag(-1200);
-        assert.ok(zoomed.game.height<=zoomed.game.width/1.5+.1,'drag cannot stretch black background');
+        assert.ok(zoomed.game.height<=zoomed.game.width/aspect+.1,'drag cannot stretch black background');
         const smallest=await drag(1200);
-        assert.ok(smallest.game.height>=64,'drag leaves a usable minimum game area');
+        assert.ok(smallest.game.height>=63.99,'drag leaves a usable minimum game area');
         assert.ok(smallest.load.bottom<1299-24,'drag never clips save controls');
         await page.goto(entry);
         await page.waitForFunction(()=>document.body.classList.contains('playing'));await settle();
@@ -129,6 +132,11 @@ const entry = 'file:///'+require('./ui_path.cjs')('index.html').replaceAll('\\',
         assert.equal(await page.evaluate(()=>requests.filter(r=>r.action==='keyboard_context').at(-1).blocked),true,'splitter keyboard does not reach game');
         await page.locator('#library-splitter').dblclick();await settle();
         assert.equal(await page.evaluate(()=>preferences.library_split),null,'double click restores automatic size');
+        for(const next of ['GB','GBC','GBA']){
+            await page.evaluate(next=>{fixture.game.system=next;onNativeState({...fixture,game:{...fixture.game}});},next);await settle();
+            const switched=await page.evaluate(()=>layoutMetrics());
+            assert.ok(Math.abs(switched.game.width/switched.game.height-(next==='GBA'?1.5:160/144))<.01,'switching system restores native aspect ratio');
+        }
         assert.deepEqual(errors,[],'no JavaScript errors');
         fs.writeFileSync(path.join(output,'report.json'),JSON.stringify({passed:true,vertical_only:true,settings_and_library:true,splitter:{mouse:true,keyboard:true,persist_and_reopen:true,bounds:true,double_click_reset:true,before,dragged,reopened},cases:results},null,2));
         console.log(JSON.stringify({passed:true,cases:results.map(r=>({size:r.window,mode:r.mode,bottomGap:r.mainBottom-r.load.bottom}))},null,2));
